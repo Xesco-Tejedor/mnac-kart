@@ -1,0 +1,91 @@
+/* MNAC KART — amber identity on charcoal, arcade feel */
+:root{
+  --amber:#ffb000; --amber-dim:#b97e00; --char:#140d06; --panel:#1f150a;
+  --ink:#f5e7c8; --line:#3a2a12;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#000;overflow:hidden;font-family:"Space Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#frame{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 120% at 50% 10%,#241708 0%,#0b0703 70%)}
+#game{
+  width:min(100vw,calc(100vh*16/9));height:min(100vh,calc(100vw*9/16));
+  image-rendering:pixelated;image-rendering:crisp-edges;
+  background:#000;box-shadow:0 0 60px rgba(255,176,0,.14),0 0 8px rgba(0,0,0,.9);
+  touch-action:none;user-select:none;-webkit-user-select:none;
+}
+.hidden{display:none!important}
+/* rotate hint */
+#rotateHint{position:fixed;inset:0;background:rgba(8,5,2,.96);z-index:60;display:flex;align-items:center;justify-content:center}
+.rotateCard{text-align:center;color:var(--ink);padding:24px;border:2px solid var(--amber);border-radius:12px;background:var(--panel)}
+.rotateIcon{font-size:44px;animation:spin 1.6s ease-in-out infinite}
+@keyframes spin{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(90deg)}}
+.rotateCard p{margin-top:10px;font-size:15px;color:var(--amber)}
+/* touch */
+#touchUI{position:fixed;inset:0;z-index:40;pointer-events:none}
+#steerZone{position:absolute;left:0;bottom:0;height:46%;width:52%;display:flex;align-items:flex-end;gap:10px;padding:0 0 14px 12px}
+#actionZone{position:absolute;right:0;bottom:0;height:52%;width:40%;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:10px;padding:0 12px 14px 0}
+.tbtn{pointer-events:auto;border:2px solid rgba(255,176,0,.55);background:rgba(31,21,10,.55);color:var(--amber);
+  border-radius:14px;font-weight:700;letter-spacing:.5px;backdrop-filter:blur(2px);touch-action:none}
+.tbtn.steer{width:clamp(64px,18vw,110px);height:clamp(64px,18vw,110px);font-size:clamp(26px,7vw,42px)}
+.tbtn.action{width:clamp(54px,14vw,84px);height:clamp(54px,14vw,84px);font-size:clamp(9px,2.2vw,12px);line-height:1.15;white-space:nowrap;overflow:hidden}
+.tbtn.action.big{width:clamp(66px,17vw,100px);height:clamp(66px,17vw,100px)}
+.tbtn.action.small{width:clamp(48px,12vw,70px);height:clamp(48px,12vw,70px);font-size:11px}
+.tbtn.active{background:rgba(255,176,0,.45);color:#140d06}
+/* corner buttons */
+.cornerBtn{position:fixed;top:10px;left:10px;z-index:50;width:40px;height:40px;border-radius:10px;
+  border:2px solid rgba(255,176,0,.5);background:rgba(20,13,6,.6);color:var(--amber);font-size:17px;cursor:pointer}
+.cornerBtn.right{left:auto;right:10px}
+/* UI overlay */
+#uiLayer{position:fixed;inset:0;z-index:45;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.uiCard{pointer-events:auto;background:rgba(20,13,6,.92);border:2px solid var(--amber);border-radius:14px;
+  color:var(--ink);max-width:min(92vw,560px);max-height:86vh;overflow:auto;padding:18px 20px;
+  box-shadow:0 0 40px rgba(255,176,0,.18)}
+.uiCard h2{color:var(--amber);font-size:20px;margin-bottom:10px;letter-spacing:1px}
+.uiCard h3{color:var(--amber);font-size:15px;margin:12px 0 6px}
+.uiCard p,.uiCard li{font-size:14px;line-height:1.5}
+.uiCard ul{padding-left:18px}
+.uiCard .kbd{display:inline-block;min-width:20px;text-align:center;padding:1px 6px;border:1px solid var(--amber-dim);border-radius:5px;background:#000;color:var(--amber);font-size:12px;margin:0 2px}
+.uiClose{display:block;margin:14px auto 0;padding:8px 22px;border-radius:9px;border:2px solid var(--amber);
+  background:var(--amber);color:#140d06;font-weight:700;font-size:14px;cursor:pointer}
+.uiClose:active{transform:scale(.96)}
+@media (max-height:420px){ .cornerBtn{width:34px;height:34px;font-size:14px} }
+/* menus */
+.uiCard.wide{max-width:min(94vw,720px)}
+.titleCard{text-align:center;min-width:min(88vw,380px)}
+.logoWrap{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:4px}
+.logoWrap canvas{width:48px;height:40px;image-rendering:pixelated}
+.logoWrap h1{color:var(--amber);font-size:clamp(26px,7vw,38px);letter-spacing:3px;font-family:"Courier New",monospace;font-weight:900;text-shadow:3px 3px 0 #5a3a00}
+.tagline{font-size:13px;opacity:.85;margin-bottom:14px}
+.foot{margin-top:14px;font-size:11px;opacity:.55}
+.btnCol{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.menuBtn{padding:11px 16px;border-radius:10px;border:2px solid var(--amber-dim);background:#000;
+  color:var(--ink);font-weight:700;font-size:15px;cursor:pointer;letter-spacing:.5px;text-align:center}
+.menuBtn.sel,.menuBtn:hover{border-color:var(--amber);background:var(--panel);color:var(--amber);outline:none}
+.menuBtn.backBtn{opacity:.8;font-size:13px}
+.charGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0}
+.charCard{border:2px solid var(--line);border-radius:10px;background:#0d0904;padding:10px;cursor:pointer;
+  color:var(--ink);text-align:center;font-family:inherit}
+.charCard.sel,.charCard:hover{border-color:var(--amber);background:var(--panel)}
+.charCard .face{width:48px;height:48px;image-rendering:pixelated;border-radius:6px;background:#000}
+.cname{color:var(--amber);font-weight:700;font-size:13px;margin-top:6px}
+.ckart{font-size:11px;opacity:.85;margin:2px 0}
+.cdesc{font-size:11px;opacity:.65;margin-bottom:6px;min-height:26px}
+.statRow{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--ink);margin-top:3px}
+.statRow span{width:26px;text-align:left;opacity:.7}
+.statRow .bar{flex:1;height:6px;background:#000;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.statRow .bar div{height:100%;background:var(--amber)}
+.trackGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0}
+.trackCard{border:2px solid var(--line);border-radius:10px;background:#0d0904;padding:10px;cursor:pointer;color:var(--ink);font-family:inherit}
+.trackCard.sel,.trackCard:hover{border-color:var(--amber);background:var(--panel)}
+.trackCard canvas{width:100%;image-rendering:pixelated;border-radius:6px;background:#000}
+.rtable{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+.rtable th{color:var(--amber);text-align:left;border-bottom:1px solid var(--line);padding:4px 6px}
+.rtable td{padding:4px 6px;border-bottom:1px solid #241a0c}
+.rrow.me td{color:var(--amber);font-weight:700}
+.rec{color:#7CFC00;font-weight:700;margin-left:8px}
+.champ{margin-top:12px;font-size:16px;color:var(--amber)}
+@media (max-height:420px){
+  .charGrid{grid-template-columns:repeat(4,1fr)}
+  .cdesc{display:none}
+  .uiCard{padding:10px 14px}
+  .menuBtn{padding:7px 12px;font-size:13px}
+}
