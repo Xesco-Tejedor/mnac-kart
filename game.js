@@ -1500,6 +1500,12 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keyup',e=>{keys[e.code]=false;
   if(e.code==='KeyX'||e.code==='Enter')Input._itemHeld=false;});
 window.addEventListener('pointerdown',()=>Audio8.resume(),{passive:true});
+/* block browser long-press UI (selection bar / context menu) over the game */
+document.addEventListener('contextmenu',e=>{e.preventDefault();});
+document.addEventListener('selectstart',e=>{
+  if(e.target.closest&&e.target.closest('#touchUI,#game,.cornerBtn,#rotateHint'))e.preventDefault();
+});
+document.addEventListener('dragstart',e=>{e.preventDefault();});
 
 /* ------------------------------ touch UI ------------------------------ */
 function setupTouch(){
@@ -1508,7 +1514,10 @@ function setupTouch(){
   bindHold('btnDrift','drift');bindHold('btnBrake','brake');
   const bi=document.getElementById('btnItem');
   bi.addEventListener('pointerdown',e=>{e.preventDefault();Audio8.resume();Input.item=true;bi.classList.add('active');});
-  bi.addEventListener('pointerup',e=>{e.preventDefault();bi.classList.remove('active');});
+  const biOff=e=>{e.preventDefault();bi.classList.remove('active');};
+  bi.addEventListener('pointerup',biOff);
+  bi.addEventListener('pointercancel',biOff);
+  bi.addEventListener('pointerleave',biOff);
   document.getElementById('btnSound').onclick=()=>{
     Audio8.resume();Audio8.setEnabled(!Audio8.enabled);
     const s=loadSave();s.sound=Audio8.enabled;saveSave(s);
