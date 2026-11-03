@@ -1077,6 +1077,14 @@ function drawHUD(ctx,race){
     ctx.fillText(p.drift.level===2?'¡TURBO!':'turbo…',VW/2,VH-78);
     ctx.textAlign='left';
   }
+  /* tilt steering indicator (touch, live) */
+  if(isTouch&&Tilt.enabled&&Tilt.active&&race.state==='racing'){
+    const iw=60,ix=VW/2-iw/2,iy=VH-10;
+    ctx.fillStyle='rgba(12,8,3,.6)';ctx.fillRect(ix-3,iy-3,iw+6,12);
+    ctx.fillStyle='rgba(245,231,200,.25)';ctx.fillRect(ix,iy+2,iw,3);
+    const mx=VW/2+clamp(Tilt.steer,-1,1)*(iw/2-3);
+    ctx.fillStyle='#ffb000';ctx.fillRect(mx-2,iy-1,4,9);
+  }
   /* item hint for touch (big, centered above buttons) */
   if(isTouch&&p.item){
     ctx.font='26px serif';ctx.textAlign='center';
@@ -1252,6 +1260,7 @@ function showGuide(){
     'Completa '+3+' voltes abans que els rivals.</p>'+
     '<h3>Controls (mòbil)</h3><ul>'+
     '<li><span class="kbd">◀</span><span class="kbd">▶</span> gira el kart</li>'+
+    '<li><span class="kbd">GIRO</span> inclina el mòbil com un volant per girar; es calibra sol a l’inici de cada cursa. Toca’l per activar-lo o desactivar-lo</li>'+
     '<li><span class="kbd">DERRAP</span> mantén premut en una corba per derrapar i carrega el turbo; deixa anar per disparar-lo</li>'+
     '<li><span class="kbd">OBJETE</span> utilitza l’objecte que portis</li>'+
     '<li><span class="kbd">FRE</span> frena</li></ul>'+
@@ -1433,6 +1442,7 @@ function startRace(){
   Game.race.cam={};
   Game.race.trackIdx=trackIdx;
   Game.state='race';Game.paused=false;
+  tiltRecalibrate();
   if(Game.touchMode)document.getElementById('touchUI').classList.remove('hidden');
   Audio8.playSong(SONGS[track.def.song]);
   updateRotateHint();
@@ -1469,6 +1479,7 @@ function refreshSteer(){
   Input.steer=(keys.ArrowLeft?-1:0)+(keys.ArrowRight?1:0);
   if(touch.left)Input.steer=-1;
   if(touch.right)Input.steer=1;
+  if(Input.steer===0&&Tilt.active&&Tilt.enabled)Input.steer=Tilt.steer;
   Input.brake=!!(keys.ArrowDown||keys.KeyS||touch.brake);
   Input.drift=!!(keys.Space||keys.ShiftLeft||keys.ShiftRight||touch.drift);
 }
@@ -1507,11 +1518,71 @@ document.addEventListener('selectstart',e=>{
 });
 document.addEventListener('dragstart',e=>{e.preventDefault();});
 
+/* ------------------------- tilt steering (volant) --------------------- */
+/* Steer by rolling the phone like a wheel. Works from the relative rotation
+   against a baseline captured at race start, so it is pose- and
+   landscape-side-independent: the steering signal is the twist about the
+   screen normal, which forward/back lean never pollutes. */
+const Tilt={supported:false,enabled:true,active:false,base:null,steer:0};
+const TILT_MAX_DEG=24;          /* twist for full lock */
+const TILT_DEAD=0.06;           /* deadzone in twist units (~3.5deg) */
+function tiltMat(a,b,g){
+  const D=Math.PI/180,ca=Math.cos(a*D),sa=Math.sin(a*D),cb=Math.cos(b*D),sb=Math.sin(b*D),cg=Math.cos(g*D),sg=Math.sin(g*D);
+  return [
+    [ca*cg-sa*sb*sg,-sa*cb,ca*sg+sa*sb*cg],
+    [sa*cg+ca*sb*sg,ca*cb,sa*sg-ca*sb*cg],
+    [-cb*sg,sb,cb*cg]
+  ];
+}
+function tiltTwist(base,now){
+  if(!base||!now)return 0;
+  const A=tiltMat(base.alpha,base.beta,base.gamma),B=tiltMat(now.alpha,now.beta,now.gamma);
+  let r10=0,r01=0;
+  for(let k=0;k<3;k++){r10+=A[k][1]*B[k][0];r01+=A[k][0]*B[k][1];}
+  return (r10-r01)/2; /* = sin(twist about screen normal) */
+}
+function tiltSteerFromTwist(w){
+  if(Math.abs(w)<TILT_DEAD)return 0;
+  const max=Math.sin(TILT_MAX_DEG*Math.PI/180);
+  return -clamp(Math.sign(w)*(Math.abs(w)-TILT_DEAD)/(max-TILT_DEAD),-1,1);
+}
+function tiltRecalibrate(){Tilt.base=null;Tilt.steer=0;}
+function tiltRequestPermission(){
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      DeviceOrientationEvent.requestPermission().catch(()=>{});
+    }
+  }catch(e){}
+}
+window.addEventListener('deviceorientation',e=>{
+  if(e.alpha===null||e.alpha===undefined||e.beta===null||e.gamma===null)return;
+  Tilt.supported=true;
+  if(!Tilt.enabled){Tilt.active=false;Tilt.steer=0;return;}
+  const now={alpha:e.alpha,beta:e.beta,gamma:e.gamma};
+  if(!Tilt.base){Tilt.base=now;Tilt.steer=0;}
+  else Tilt.steer=tiltSteerFromTwist(tiltTwist(Tilt.base,now));
+  Tilt.active=true;
+  updateTiltBtn();
+});
+function updateTiltBtn(){
+  const b=document.getElementById('btnTilt');
+  if(b){b.classList.toggle('off',!(Tilt.enabled&&Tilt.active));b.setAttribute('aria-pressed',Tilt.enabled?'true':'false');}
+}
+
 /* ------------------------------ touch UI ------------------------------ */
 function setupTouch(){
   Game.touchMode=('ontouchstart'in window)||navigator.maxTouchPoints>0||/touch=1/.test(location.search);
   bindHold('btnLeft','left');bindHold('btnRight','right');
   bindHold('btnDrift','drift');bindHold('btnBrake','brake');
+  const bt=document.getElementById('btnTilt');
+  if(bt)bt.addEventListener('pointerdown',e=>{
+    e.preventDefault();Audio8.resume();
+    Tilt.enabled=!Tilt.enabled;
+    if(Tilt.enabled)tiltRecalibrate();
+    if(!Tilt.enabled){Tilt.active=false;Tilt.steer=0;}
+    updateTiltBtn();
+  });
+  document.addEventListener('pointerdown',tiltRequestPermission,{once:true});
   const bi=document.getElementById('btnItem');
   bi.addEventListener('pointerdown',e=>{e.preventDefault();Audio8.resume();Input.item=true;bi.classList.add('active');});
   const biOff=e=>{e.preventDefault();bi.classList.remove('active');};
@@ -1592,7 +1663,8 @@ function boot(){
 boot();
 
 /* ----------------------------- test hooks ----------------------------- */
-window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,
+window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,
+  tiltMat,tiltTwist,tiltSteerFromTwist,tiltRecalibrate,
   buildTrack,builtTrack,makeRace,stepRace,stepKart,aiInput,kartContacts,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
   startRace,startGP,showTitle,showCC,showChars,showTracks,showGuide,TILE,
