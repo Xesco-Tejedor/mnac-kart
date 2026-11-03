@@ -217,6 +217,63 @@ T('tilt: steer sign, deadzone and clamp',()=>{
   ok(M.tiltSteerFromTwist(0.9)===-1&&M.tiltSteerFromTwist(-0.9)===1,'clamp');
   ok(M.Tilt&&M.Tilt.enabled===true&&M.Tilt.base===null,'Tilt defaults');
 });
+/* ---- wall collision regression (kart body vs wall tiles) ---- */
+T('walls: kart body never clips walls at any angle',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  const spots=[1,4,7,10].map(i=>r.track.wps[i]);
+  for(const s of spots){
+    for(let a=0;a<8;a++){
+      k.x=s.x;k.y=s.y;k.angle=a*Math.PI/4;k.dirAngle=k.angle;k.speed=300;k.boostT=2;
+      for(let i=0;i<120;i++){
+        M.stepKart(k,IN,r.track,DT,1,r);
+        ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R*0.98),
+           'clipped wall: spot '+s.x.toFixed(0)+','+s.y.toFixed(0)+' angle '+a+' step '+i);
+      }
+    }
+  }
+});
+T('walls: full boost cannot tunnel the perimeter',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  const s=r.track.wps[3]; /* bottom straight, east end */
+  k.x=s.x;k.y=s.y;k.angle=0;k.dirAngle=0;k.speed=500;k.boostT=30;
+  for(let i=0;i<600;i++){
+    M.stepKart(k,IN,r.track,DT,1.18,r); /* 150cc multiplier */
+    ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R*0.98),'tunneled at step '+i+' x='+k.x.toFixed(1)+' y='+k.y.toFixed(1));
+    ok(k.x>0&&k.y>0&&k.x<r.track.worldW&&k.y<r.track.worldH,'left world');
+  }
+});
+T('contacts: bumps never shove a kart into a wall',()=>{
+  const r=mkRace(0,0);
+  const a=r.karts[0], b=r.karts[1];
+  /* find a road tile with a wall neighbour */
+  const tr=r.track; let spot=null;
+  for(let j=1;j<tr.h-1&&!spot;j++)for(let i=1;i<tr.w-1;i++){
+    if(tr.tiles[j][i]!==M.T_ROAD)continue;
+    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    for(const d of dirs) if(tr.tiles[j+d[1]][i+d[0]]===M.T_WALL){spot={i,j,dx:d[0],dy:d[1]};break;}
+    if(spot)break;
+  }
+  ok(spot,'no wall-adjacent road tile found');
+  for(let n=0;n<40;n++){
+    /* park a next to the wall, b overlapping between a and the wall */
+    a.x=(spot.i+0.5)*M.TILE-spot.dx*10; a.y=(spot.j+0.5)*M.TILE-spot.dy*10;
+    b.x=a.x+spot.dx*20; b.y=a.y+spot.dy*20;
+    a.speed=200;b.speed=200;
+    M.kartContacts(r);
+    ok(!M.circleHitsWall(tr,a.x,a.y,M.WALL_R*0.98),'a in wall, iter '+n);
+    ok(!M.circleHitsWall(tr,b.x,b.y,M.WALL_R*0.98),'b in wall, iter '+n);
+  }
+});
+T('race: 30s from crowded grid, no kart ever enters a wall',()=>{
+  const r=mkRace(0,0);
+  for(let i=0;i<1800;i++){
+    M.stepRace(r,DT,IN);
+    for(const k of r.karts){
+      ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R*0.98),
+         (k.isPlayer?'player':'ai')+' in wall at step '+i);
+    }
+  }
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
