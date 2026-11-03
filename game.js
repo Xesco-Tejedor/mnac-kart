@@ -681,7 +681,7 @@ function stepKart(k,input,tr,dt,ccMult,race){
       const now=race.time;
       const lapT=now-k.lapStart; k.lapStart=now; k.lastLap=lapT;
       if(k.lap>1&&(!k.bestLap||lapT<k.bestLap)) k.bestLap=lapT;
-      if(k.isPlayer&&k.lap>race.laps&&!k.finished){
+      if(k.lap>race.laps&&!k.finished){
         k.finished=true; k.finishTime=now;
       }
     }
@@ -925,8 +925,8 @@ function stepRace(race,dt,playerInput){
   stepWorldItems(race,dt);
   /* positions */
   const sorted=[...race.karts].sort((a,b)=>
-    (b.finished?1e9+b.progress-(b.finishTime||0):b.progress)-
-    (a.finished?1e9+a.progress-(a.finishTime||0):a.progress));
+    (b.finished?1e9-(b.finishTime||0):b.progress)-
+    (a.finished?1e9-(a.finishTime||0):a.progress));
   sorted.forEach((k,i)=>k.pos=i+1);
   race.player=race.karts.find(k=>k.isPlayer);
   if(race.player&&race.player.finished&&!race.resultsShown){
@@ -1363,7 +1363,7 @@ function showResults(race){
     const rows=[...race.karts].sort((a,b)=>a.pos-b.pos).map(k=>{
       const me=k.isPlayer?' me':'';
       return '<tr class="rrow'+me+'"><td>'+k.pos+'</td><td>'+k.drv.name+'</td><td>'+
-        (k.finished?fmtTime(k.finishTime):fmtTime(k.bestLap||0))+'</td></tr>';
+        (k.finished?fmtTime(k.finishTime):'--:--.--')+'</td></tr>';
     }).join('');
     card.insertAdjacentHTML('beforeend',
       '<table class="rtable"><tr><th></th><th>Pilot</th><th>Temps</th></tr>'+rows+'</table>');
