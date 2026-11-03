@@ -340,6 +340,18 @@ T('lap: corner-cutting racing line completes a lap',()=>{
   driveCut(r,k,380,60*240);
   ok(k.lap>=2,'counter frozen: lap='+k.lap+' wpIndex='+k.wpIndex);
 });
+T('results: rival that finishes first ranks ahead of the player',()=>{
+  const r=mkRace(0,0); const p=r.karts.find(x=>x.isPlayer); const a=r.karts.find(x=>!x.isPlayer);
+  const N=r.track.wps.length;
+  a.lap=r.laps; a.wpIndex=N-1; a.speed=0;
+  let wp=r.track.wps[N-1]; a.x=wp.x;a.y=wp.y;
+  M.stepRace(r,DT,IN);
+  wp=r.track.wps[0]; a.x=wp.x;a.y=wp.y;
+  M.stepRace(r,DT,IN);
+  ok(a.finished&&a.finishTime>0,'rival never finishes');
+  ok(!p.finished,'player must not finish with the rival');
+  ok(a.pos<p.pos,'finished rival pos='+a.pos+' player pos='+p.pos);
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
