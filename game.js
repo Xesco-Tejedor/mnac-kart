@@ -298,8 +298,8 @@ const DRIVERS=[
   facePal:{h:'#5a1224',s:'#b03a2e',k:'#1c0603',b:'#7a1f3d',t:'#3d0f1f'}}
 ];
 DRIVERS.forEach(d=>{
-  d.kartSprite=kartBody(d.body,d.trim,d.skin,d.hat,d.extra);
-  d.faceSprite=portrait(d.face,d.facePal);
+  d.kartSprite=MNACArt.kart(d);
+  d.faceSprite=MNACArt.portrait(d);
 });
 
 /* ------------------------------ tracks -------------------------------- */
@@ -396,59 +396,10 @@ function buildTrack(def){
   for(let y=PAD;y<PAD+def.h;y++){g[y][PAD]='X';g[y][PAD+def.w-1]='X';}
   const W2=def.w+PAD*2,H2=def.h+PAD*2;
   const tiles=g.map(r=>r.map(ch=>CHAR2TILE[ch]));
-  /* prerender 16px/tile map canvas */
-  const TS=16, mc=document.createElement('canvas');
+  /* prerender painted map canvas, 32px/tile */
+  const TS=32, mc=document.createElement('canvas');
   mc.width=W2*TS; mc.height=H2*TS;
-  const x=mc.getContext('2d'); const P=def.pal;
-  srand(20261103+def.id.length*77);
-  for(let j=0;j<H2;j++)for(let i=0;i<W2;i++){
-    const t=tiles[j][i], px=i*TS, py=j*TS;
-    const checker=(i+j)%2===0;
-    let col;
-    if(g[j][i]===','){ col=checker?'#171008':'#130d06'; }
-    else switch(t){
-      case T_WALL: col=P.wall; break;
-      case T_ROAD: col=P.roadA; break;
-      case T_START: col=checker?'#c8c0b0':'#3a3630'; break;
-      case T_BOOST: col='#7a4a00'; break;
-      case T_ITEM: col='#5a3a6e'; break;
-      case T_COIN: col=P.roadA; break;
-      default: col=P.floorA;
-    }
-    x.fillStyle=col; x.fillRect(px,py,TS,TS);
-    /* subtle 6% checker darkening instead of hard two-tone */
-    if(checker&&t!==T_WALL&&t!==T_START){ x.fillStyle='rgba(0,0,0,.06)'; x.fillRect(px,py,TS,TS); }
-    /* road edge outline where road meets non-road */
-    if(roadish(t)){
-      const edge='rgba(20,12,4,.85)';
-      if(!roadish(tiles[j-1]&&tiles[j-1][i]!==undefined?tiles[j-1][i]:T_WALL)){x.fillStyle=edge;x.fillRect(px,py,TS,2);}
-      if(!roadish(tiles[j+1]&&tiles[j+1][i]!==undefined?tiles[j+1][i]:T_WALL)){x.fillStyle=edge;x.fillRect(px,py+TS-2,TS,2);}
-      if(!roadish(tiles[j][i-1]!==undefined?tiles[j][i-1]:T_WALL)){x.fillStyle=edge;x.fillRect(px,py,2,TS);}
-      if(!roadish(tiles[j][i+1]!==undefined?tiles[j][i+1]:T_WALL)){x.fillStyle=edge;x.fillRect(px+TS-2,py,2,TS);}
-    }
-    if(t===T_WALL){
-      x.fillStyle=P.wallTop; x.fillRect(px,py,TS,3);
-      x.fillStyle='rgba(0,0,0,.35)'; x.fillRect(px,py+TS-2,TS,2);
-    }
-    if(t===T_ROAD&&rnd()<0.05){ x.fillStyle='rgba(0,0,0,.05)'; x.fillRect(px+2+(rnd()*8|0),py+2+(rnd()*8|0),3,3); }
-    if(t===T_BOOST){
-      x.fillStyle='#ffb000';
-      x.fillRect(px+3,py+6,10,4); x.fillRect(px+5,py+3,6,10);
-      x.fillStyle='#fff2cc'; x.fillRect(px+6,py+6,4,4);
-    }
-    if(t===T_ITEM){
-      x.fillStyle='#c99be0'; x.fillRect(px+4,py+4,8,8);
-      x.fillStyle='#fff'; x.font='bold 8px monospace'; x.fillText('?',px+6,py+11);
-    }
-    if(t===T_COIN){
-      x.fillStyle='#ffd75e'; x.beginPath(); x.arc(px+8,py+8,4,0,TAU); x.fill();
-      x.fillStyle='#8a6a00'; x.fillRect(px+7,py+5,2,6);
-    }
-    if(t===T_START){
-      x.fillStyle=checker?'#e8e0d0':'#222';
-      x.fillRect(px,py,TS,TS);
-    }
-  }
+  MNACArt.paintMap(mc,{def,tiles,g,W2,H2,TS,T:{WALL:T_WALL,ROAD:T_ROAD,START:T_START,BOOST:T_BOOST,ITEM:T_ITEM,COIN:T_COIN}});
   /* minimap */
   const mm=document.createElement('canvas'); mm.width=W2*3; mm.height=H2*3;
   const mx=mm.getContext('2d');
@@ -462,7 +413,7 @@ function buildTrack(def){
   const wps=wpsO.map(p=>({x:(p[0]+0.5)*TILE,y:(p[1]+0.5)*TILE}))
     .filter((p,i,a)=>i===0||Math.hypot(p.x-a[i-1].x,p.y-a[i-1].y)>1)
     .filter((p,i,a)=>i<a.length-1||Math.hypot(p.x-a[0].x,p.y-a[0].y)>1);
-  const decor=def.decor.map(d=>[d[0]+PAD,d[1]+PAD,d[2]]);
+  const decor=def.decor.map(d=>[d[0]+PAD,d[1]+PAD,MNACArt.themedKind(d[2],def)]).concat(MNACArt.perimeter(def).map(d=>[d[0]+PAD,d[1]+PAD,d[2],1]));
   return {def,tiles,w:W2,h:H2,map:mc,minimap:mm,wps,decor,
           worldW:W2*TILE,worldH:H2*TILE};
 }
@@ -506,10 +457,13 @@ function decorSprite(kind){
   return c;
 }
 const DECOR_CACHE={};
-function getDecor(kind){ return DECOR_CACHE[kind]||(DECOR_CACHE[kind]=decorSprite(kind)); }
+function getDecor(kind){ return DECOR_CACHE[kind]||(DECOR_CACHE[kind]=MNACArt.decor(kind)); }
 
 /* ------------------------------- sky ---------------------------------- */
 function buildSky(def){
+  return MNACArt.backdrop(def);
+}
+function buildSkyOld(def){
   const W=960,H=80;
   const c=document.createElement('canvas'); c.width=W; c.height=H;
   const x=c.getContext('2d');
@@ -953,7 +907,7 @@ function drawKartSprite(ctx,k,cam,isPlayer){
   ctx.translate(px,py-h*0.5-(k.hopT>0?6*scale:0));
   ctx.rotate(wrapAngle(k.angle-cam.angle)+(k.drift.active?k.drift.dir*0.18:0));
   if(k.spinT>0) ctx.rotate(k.spinT*10);
-  ctx.imageSmoothingEnabled=false;
+  ctx.imageSmoothingEnabled=true;
   ctx.drawImage(spr,-w/2,-h/2,w,h);
   /* shield ring */
   if(k.shieldT>0){
@@ -999,7 +953,7 @@ function drawRace(ctx,race,skies){
   const draws=[];
   for(const d of tr.decor){
     const pr=project(cam,(d[0]+0.5)*TILE,(d[1]+0.5)*TILE);
-    if(pr)draws.push({d:pr.d,f:()=>drawDeco(ctx,cam,(d[0]+0.5)*TILE,(d[1]+0.5)*TILE,d[2])});
+    if(pr&&(!d[3]||pr.d<1700))draws.push({d:pr.d,f:()=>drawDeco(ctx,cam,(d[0]+0.5)*TILE,(d[1]+0.5)*TILE,d[2])});
   }
   for(const key of coinEntities(race)){
     const pr=project(cam,key.x,key.y);
@@ -1040,6 +994,7 @@ function drawRace(ctx,race,skies){
   }
   /* player on top */
   if(p)drawKartSprite(ctx,p,cam,true);
+  MNACArt.postFx(ctx,tr.def,performance.now()/1000,p?Math.min(1,Math.abs(p.speed||0)/400):0.5);
 }
 function wp1x(tr){return tr.wps[0].x;}
 function coinEntities(race){
@@ -1202,7 +1157,7 @@ function showTitle(){
   const card=el('div','uiCard titleCard');
   const logo=el('div','logoWrap');
   const lc=document.createElement('canvas');lc.width=48;lc.height=40;
-  lc.getContext('2d').drawImage(DRIVERS[4].kartSprite,0,0); /* AgnusDei, 7 rodes */
+  lc.getContext('2d').drawImage(DRIVERS[4].kartSprite,0,0,48,40); /* AgnusDei, 7 rodes */
   logo.appendChild(lc);
   logo.appendChild(el('h1',null,'MNAC KART'));
   card.appendChild(logo);
@@ -1401,7 +1356,7 @@ function renderWorld(ctx,track,cam,sky,shake){
   const cosA=Math.cos(cam.angle),sinA=Math.sin(cam.angle);
   /* sky, parallax by angle */
   ctx.setTransform(1,0,0,1,0,0);
-  const skyW=sky.width;
+  const skyW=960;
   let off=((cam.angle/TAU)*skyW)%skyW; if(off<0)off+=skyW;
   for(let k=-1;k<=1;k++) ctx.drawImage(sky,-off+k*skyW,0,skyW,HORIZON+1);
   /* floor: per-scanline affine with 1px clip */
@@ -1413,7 +1368,7 @@ function renderWorld(ctx,track,cam,sky,shake){
     const dy=y-HORIZON+0.5;
     const dist=CAM_H*FOCAL/dy;
     const scale=dist/FOCAL;
-    const MS=TILE/16; /* map canvas is 16px/tile; world is 64/tile */
+    const MS=TILE/(track.map.width/track.w);
     const a=-sinA/scale*MS, b=cosA/scale*MS, c=cosA/scale*MS, d=sinA/scale*MS;
     const e=(cam.x*sinA-cam.y*cosA)/scale+VW/2+sx0;
     const f=y-(cam.x*cosA+cam.y*sinA+dist)/scale+sy0;
@@ -1441,7 +1396,7 @@ function drawKartSprite(ctx,k,cam,isPlayer){
   ctx.translate(px,py-h*0.5-(k.hopT>0?h*0.12:0));
   ctx.rotate(wrapAngle(k.angle-cam.angle)+(k.drift.active?k.drift.dir*0.18:0));
   if(k.spinT>0)ctx.rotate(k.spinT*10);
-  ctx.imageSmoothingEnabled=false;
+  ctx.imageSmoothingEnabled=true;
   ctx.drawImage(spr,-w/2,-h/2,w,h);
   if(k.shieldT>0){
     ctx.strokeStyle='rgba(255,215,94,.85)';ctx.lineWidth=2;
@@ -1453,10 +1408,10 @@ function drawDeco(ctx,cam,wx,wy,kind){
   const pr=project(cam,wx,wy);
   if(!pr||pr.s<0.1)return;
   const spr=getDecor(kind);
-  const h=92*pr.s, w=h*spr.width/spr.height;
-  ctx.imageSmoothingEnabled=false;
-  ctx.fillStyle='rgba(0,0,0,.35)';
-  ctx.beginPath();ctx.ellipse(pr.x,pr.y,w*0.4,Math.max(1.5,h*0.08),0,0,TAU);ctx.fill();
+  const h=(MNACArt.DECOR_H[kind.split('_')[0]]||92)*pr.s, w=h*spr.width/spr.height;
+  ctx.imageSmoothingEnabled=true;
+  if(kind.indexOf('arcada')!==0){ctx.fillStyle='rgba(0,0,0,.35)';
+  ctx.beginPath();ctx.ellipse(pr.x,pr.y,w*0.4,Math.max(1.5,h*0.08),0,0,TAU);ctx.fill();}
   ctx.drawImage(spr,pr.x-w/2,pr.y-h,w,h);
 }
 function drawCoinEnt(ctx,cam,track,key){
