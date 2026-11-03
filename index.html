@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#140d06">
+<title>MNAC KART — Curses al Museu</title>
+<meta name="description" content="Curses de karts retro dins del MNAC: Mestre Pintor, Serafí, Crist Majestat, Sant Lluc de les Brases Rojes, AgnusDei i més. Estil arcade 16 bits, al navegador.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23140d06'/><rect x='3' y='6' width='10' height='5' fill='%23ffb000'/><rect x='4' y='4' width='3' height='3' fill='%23ffb000'/><rect x='9' y='4' width='3' height='3' fill='%23ffb000'/><rect x='3' y='11' width='3' height='3' fill='%23444'/><rect x='10' y='11' width='3' height='3' fill='%23444'/></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="frame">
+  <canvas id="game" width="480" height="270"></canvas>
+
+  <!-- Rotate hint for portrait phones -->
+  <div id="rotateHint" class="hidden">
+    <div class="rotateCard">
+      <div class="rotateIcon">📱↻</div>
+      <p>Gira el mòbil per jugar en panoràmic</p>
+    </div>
+  </div>
+
+  <!-- Touch controls -->
+  <div id="touchUI" class="hidden">
+    <div id="steerZone">
+      <button id="btnLeft" class="tbtn steer" aria-label="Gira a l'esquerra">◀</button>
+      <button id="btnRight" class="tbtn steer" aria-label="Gira a la dreta">▶</button>
+    </div>
+    <div id="actionZone">
+      <button id="btnItem" class="tbtn action" aria-label="Utilitza objecte">OBJECTE</button>
+      <button id="btnDrift" class="tbtn action big" aria-label="Derrapa">DERRAP</button>
+      <button id="btnBrake" class="tbtn action small" aria-label="Frena">FRE</button>
+    </div>
+  </div>
+
+  <!-- On-screen menu / guide overlay -->
+  <div id="uiLayer"></div>
+
+  <button id="btnSound" class="cornerBtn" aria-label="So">🔊</button>
+  <button id="btnGuide" class="cornerBtn right" aria-label="Guia">?</button>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
