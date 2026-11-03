@@ -152,9 +152,12 @@ T('finish after laps',()=>{
   const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
   const N=r.track.wps.length;
   k.lap=r.laps; k.wpIndex=N-1;
-  const wp=r.track.wps[N-1]; k.x=wp.x;k.y=wp.y;
+  let wp=r.track.wps[N-1]; k.x=wp.x;k.y=wp.y;
   M.stepRace(r,DT,IN);
-  ok(k.finished,'not finished');
+  ok(k.wpIndex===0&&!k.finished,'last waypoint must not finish the race');
+  wp=r.track.wps[0]; k.x=wp.x;k.y=wp.y;
+  M.stepRace(r,DT,IN);
+  ok(k.finished,'not finished after crossing the line');
   M.stepRace(r,DT,IN);
   ok(r.resultsShown,'no results flag');
 });
@@ -273,6 +276,69 @@ T('race: 30s from crowded grid, no kart ever enters a wall',()=>{
          (k.isPlayer?'player':'ai')+' in wall at step '+i);
     }
   }
+});
+/* --- lap counter regression: wide passes, line semantics, corner cuts --- */
+T('lap: off-center passes (150px) still count',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  k.speed=0;
+  const N=r.track.wps.length;
+  for(let i=0;i<N;i++){
+    const wp=r.track.wps[k.wpIndex];
+    const pv=r.track.wps[(k.wpIndex-1+N)%N];
+    const ang=Math.atan2(wp.y-pv.y,wp.x-pv.x);
+    /* 150px off the racing line and 30px past the checkpoint plane:
+       a real on-road wide pass (road half-width ~166px) */
+    k.x=wp.x+Math.cos(ang+Math.PI/2)*150+Math.cos(ang)*30;
+    k.y=wp.y+Math.sin(ang+Math.PI/2)*150+Math.sin(ang)*30;
+    M.stepKart(k,IN,r.track,DT,1,r);
+  }
+  ok(k.lap===2,'lap='+k.lap+' wpIndex='+k.wpIndex+' (wide passes froze the counter)');
+});
+T('lap: counts at the start line, not before',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  k.speed=0;
+  const N=r.track.wps.length;
+  for(let i=1;i<N;i++){
+    const wp=r.track.wps[k.wpIndex];
+    k.x=wp.x;k.y=wp.y;
+    M.stepKart(k,IN,r.track,DT,1,r);
+  }
+  ok(k.wpIndex===0&&k.lap===1,'premature lap before the line: lap='+k.lap+' wpIndex='+k.wpIndex);
+  const wp0=r.track.wps[0]; k.x=wp0.x;k.y=wp0.y;
+  M.stepKart(k,IN,r.track,DT,1,r);
+  ok(k.lap===2,'lap='+k.lap+' after crossing the line');
+});
+function driveCut(r,k,lookahead,maxFrames){
+  const tr=r.track,wps=tr.wps,N=wps.length;
+  let segIdx=0;
+  for(let f=0;f<maxFrames&&k.lap<2;f++){
+    let best={d:1e18,si:segIdx,t:0};
+    for(let d=0;d<N;d++){
+      const si=(segIdx+d)%N,a=wps[si],b=wps[(si+1)%N];
+      const sx=b.x-a.x,sy=b.y-a.y,L2=sx*sx+sy*sy||1;
+      let t=((k.x-a.x)*sx+(k.y-a.y)*sy)/L2; t=Math.max(0,Math.min(1,t));
+      const px=a.x+sx*t,py=a.y+sy*t,dd=(k.x-px)*(k.x-px)+(k.y-py)*(k.y-py);
+      if(dd<best.d){best={d:dd,si,t};}
+    }
+    segIdx=best.si;
+    let rem=lookahead,si=best.si,t=best.t,tx,ty;
+    for(let g=0;g<N;g++){
+      const a=wps[si],b=wps[(si+1)%N];
+      const sx=b.x-a.x,sy=b.y-a.y,L=Math.hypot(sx,sy)||1,avail=L*(1-t);
+      if(rem<=avail){tx=a.x+sx*(t+rem/L);ty=a.y+sy*(t+rem/L);break;}
+      rem-=avail;si=(si+1)%N;t=0;
+      if(g===N-1){tx=b.x;ty=b.y;}
+    }
+    const want=Math.atan2(ty-k.y,tx-k.x);
+    let err=want-k.angle; while(err>Math.PI)err-=2*Math.PI; while(err<-Math.PI)err+=2*Math.PI;
+    const steer=Math.max(-1,Math.min(1,err*2.2));
+    M.stepKart(k,{steer,brake:false,drift:false,item:false,reverse:false},tr,DT,1,r);
+  }
+}
+T('lap: corner-cutting racing line completes a lap',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  driveCut(r,k,380,60*240);
+  ok(k.lap>=2,'counter frozen: lap='+k.lap+' wpIndex='+k.wpIndex);
 });
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
