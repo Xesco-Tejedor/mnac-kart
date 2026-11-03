@@ -676,19 +676,59 @@ function stepKart(k,input,tr,dt,ccMult,race){
   }
   k.progress=(k.lap-1)*N+((k.wpIndex-1+N)%N);
 }
+/* --- wall collision: the kart body is a circle tested against wall tiles --- */
+const WALL_R=KART_R*0.9;
+function wallTileAt(tr,tx,ty){
+  if(tx<0||ty<0||tx>=tr.w||ty>=tr.h) return T_WALL;
+  return tr.tiles[ty][tx];
+}
+function circleHitsWall(tr,x,y,r){
+  const x0=Math.floor((x-r)/TILE),x1=Math.floor((x+r)/TILE);
+  const y0=Math.floor((y-r)/TILE),y1=Math.floor((y+r)/TILE);
+  for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+    if(wallTileAt(tr,tx,ty)!==T_WALL)continue;
+    const cx=clamp(x,tx*TILE,tx*TILE+TILE),cy=clamp(y,ty*TILE,ty*TILE+TILE);
+    if(dist2(x,y,cx,cy)<r*r)return true;
+  }
+  return false;
+}
+function pushOutOfWalls(tr,k,r){
+  for(let it=0;it<4;it++){
+    const x0=Math.floor((k.x-r)/TILE),x1=Math.floor((k.x+r)/TILE);
+    const y0=Math.floor((k.y-r)/TILE),y1=Math.floor((k.y+r)/TILE);
+    let moved=false;
+    for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+      if(wallTileAt(tr,tx,ty)!==T_WALL)continue;
+      const wx0=tx*TILE,wy0=ty*TILE,wx1=wx0+TILE,wy1=wy0+TILE;
+      const cx=clamp(k.x,wx0,wx1),cy=clamp(k.y,wy0,wy1);
+      const dx=k.x-cx,dy=k.y-cy,d2=dx*dx+dy*dy;
+      if(d2>=r*r)continue;
+      if(d2<1e-8){ /* center inside the tile: exit through the nearest face */
+        const L=k.x-wx0,R=wx1-k.x,Tp=k.y-wy0,B=wy1-k.y;
+        const m=Math.min(L,R,Tp,B);
+        if(m===L)k.x=wx0-r;else if(m===R)k.x=wx1+r;
+        else if(m===Tp)k.y=wy0-r;else k.y=wy1+r;
+      }else{const d=Math.sqrt(d2),need=(r-d)/d;k.x+=dx*need;k.y+=dy*need;}
+      moved=true;
+    }
+    if(!moved)return;
+  }
+}
 function moveKart(k,tr,dt){
-  const nx=k.x+Math.cos(k.dirAngle)*k.speed*dt;
-  const ny=k.y+Math.sin(k.dirAngle)*k.speed*dt;
-  const r=KART_R*0.8;
-  const ok=(x,y)=>tileAt(tr,x+Math.cos(k.dirAngle)*r,y+Math.sin(k.dirAngle)*r)!==T_WALL
-                 &&tileAt(tr,x,y)!==T_WALL;
-  if(ok(nx,ny)){k.x=nx;k.y=ny;}
-  else if(ok(nx,k.y)){k.x=nx;k.speed*=0.94;if(k.isPlayer&&k.speed>150)Audio8.sfx('bump');}
-  else if(ok(k.x,ny)){k.y=ny;k.speed*=0.94;if(k.isPlayer&&k.speed>150)Audio8.sfx('bump');}
-  else{k.speed=-k.speed*0.22;if(k.isPlayer)Audio8.sfx('bump');}
+  const dx=Math.cos(k.dirAngle)*k.speed*dt, dy=Math.sin(k.dirAngle)*k.speed*dt;
+  const dist=Math.hypot(dx,dy), steps=Math.max(1,Math.ceil(dist/(WALL_R*0.5)));
+  const sx=dx/steps, sy=dy/steps;
+  for(let s=0;s<steps;s++){
+    const nx=k.x+sx, ny=k.y+sy;
+    if(!circleHitsWall(tr,nx,ny,WALL_R)){k.x=nx;k.y=ny;continue;}
+    if(!circleHitsWall(tr,nx,k.y,WALL_R)){k.x=nx;k.speed*=0.94;if(k.isPlayer&&Math.abs(k.speed)>150)Audio8.sfx('bump');}
+    else if(!circleHitsWall(tr,k.x,ny,WALL_R)){k.y=ny;k.speed*=0.94;if(k.isPlayer&&Math.abs(k.speed)>150)Audio8.sfx('bump');}
+    else{k.speed=-k.speed*0.22;if(k.isPlayer)Audio8.sfx('bump');break;}
+  }
+  pushOutOfWalls(tr,k,WALL_R);
 }
 function kartContacts(race){
-  const ks=race.karts;
+  const ks=race.karts, tr=race.track;
   for(let i=0;i<ks.length;i++)for(let j=i+1;j<ks.length;j++){
     const a=ks[i],b=ks[j];
     if(a.spinT>0&&b.spinT>0)continue;
@@ -696,14 +736,27 @@ function kartContacts(race){
     if(d2<rr*rr&&d2>0.01){
       const d=Math.sqrt(d2),nx=(b.x-a.x)/d,ny=(b.y-a.y)/d,ov=(rr-d)/2;
       const wa=1/a.drv.stats.weight, wb=1/b.drv.stats.weight, wt=wa+wb;
-      a.x-=nx*ov*2*(wa/wt); a.y-=ny*ov*2*(wa/wt);
-      b.x+=nx*ov*2*(wb/wt); b.y+=ny*ov*2*(wb/wt);
+      /* wall-safe separation: a bump may never shove a kart into a wall */
+      let ax=a.x-nx*ov*2*(wa/wt), ay=a.y-ny*ov*2*(wa/wt);
+      let bx=b.x+nx*ov*2*(wb/wt), by=b.y+ny*ov*2*(wb/wt);
+      let aOk=!circleHitsWall(tr,ax,ay,WALL_R), bOk=!circleHitsWall(tr,bx,by,WALL_R);
+      if(!aOk){ /* a stays: b takes the full separation if that is free */
+        const bx2=a.x+nx*rr, by2=a.y+ny*rr;
+        if(!circleHitsWall(tr,bx2,by2,WALL_R)){bx=bx2;by=by2;bOk=true;}
+      }
+      if(!bOk){ /* b stays: a takes the full separation if that is free */
+        const ax2=b.x-nx*rr, ay2=b.y-ny*rr;
+        if(!circleHitsWall(tr,ax2,ay2,WALL_R)){ax=ax2;ay=ay2;aOk=true;}
+      }
+      if(aOk){a.x=ax;a.y=ay;}
+      if(bOk){b.x=bx;b.y=by;}
       const bump=Math.min(a.speed,b.speed)*0.06;
       a.speed=Math.max(0,a.speed-bump*(wb/wt)*2);
       b.speed=Math.max(0,b.speed-bump*(wa/wt)*2);
       if(a.isPlayer||b.isPlayer)Audio8.sfx('bump');
     }
   }
+  for(const k of ks) pushOutOfWalls(tr,k,WALL_R);
 }
 
 /* ------------------------- items in the world ------------------------- */
@@ -1666,6 +1719,7 @@ boot();
 window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,
   tiltMat,tiltTwist,tiltSteerFromTwist,tiltRecalibrate,
   buildTrack,builtTrack,makeRace,stepRace,stepKart,aiInput,kartContacts,
+  circleHitsWall,pushOutOfWalls,WALL_R,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
   startRace,startGP,showTitle,showCC,showChars,showTracks,showGuide,TILE,
   drawRace,drawHUD,renderWorld,
