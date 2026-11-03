@@ -658,12 +658,24 @@ function stepKart(k,input,tr,dt,ccMult,race){
   /* use item */
   if(input.item&&k.item){ useItem(k,tr,race); }
   moveKart(k,tr,dt);
-  /* waypoint/lap tracking */
+  /* waypoint/lap tracking: a checkpoint triggers when the kart passes it
+     anywhere across the road width (crossing its plane along the track
+     direction), not only within a small radius of the racing-line center;
+     one checkpoint of skip-ahead tolerance unfreezes the counter if a pass
+     was missed entirely. The lap counts at the start/finish line (wp 0). */
   const wps=tr.wps,N=wps.length;
-  const wp=wps[k.wpIndex];
-  if(dist2(k.x,k.y,wp.x,wp.y)<110*110){
+  let crossed=0;
+  for(let probe=0;probe<2;probe++){
+    const idx=(k.wpIndex+probe)%N;
+    const wp=wps[idx],pv=wps[(idx-1+N)%N];
+    const sx=wp.x-pv.x,sy=wp.y-pv.y,sl=Math.hypot(sx,sy)||1;
+    const ux=sx/sl,uy=sy/sl,rx=k.x-wp.x,ry=k.y-wp.y;
+    const along=rx*ux+ry*uy,lat=Math.abs(rx*uy-ry*ux);
+    if(rx*rx+ry*ry<130*130||(along>0&&along<320&&lat<190)){crossed=probe+1;break;}
+  }
+  for(let c=0;c<crossed;c++){
     k.wpIndex=(k.wpIndex+1)%N;
-    if(k.wpIndex===0){
+    if(k.wpIndex===1){ /* crossed the start/finish line */
       k.lap++;
       if(k.isPlayer&&k.lap<=race.laps){Audio8.sfx('lap');}
       const now=race.time;
