@@ -185,6 +185,38 @@ T('drivers: 8 with unique karts, AgnusDei 7 wheels',()=>{
   const ag=M.DRIVERS.find(d=>d.id==='agnus');
   ok(ag.extra==='seven','agnus extra='+ag.extra);
 });
+T('tilt: same pose gives zero twist',()=>{
+  const p={alpha:90,beta:0,gamma:45};
+  ok(Math.abs(M.tiltTwist(p,p))<1e-9,'twist='+M.tiltTwist(p,p));
+});
+T('tilt: wheel twist reads on flat phone',()=>{
+  const w=M.tiltTwist({alpha:0,beta:0,gamma:0},{alpha:20,beta:0,gamma:0});
+  ok(Math.abs(w-Math.sin(20*Math.PI/180))<0.02,'twist='+w);
+});
+T('tilt: lean and roll do not steer',()=>{
+  const base={alpha:0,beta:0,gamma:0};
+  ok(Math.abs(M.tiltTwist(base,{alpha:0,beta:25,gamma:0}))<0.02,'beta lean pollutes');
+  ok(Math.abs(M.tiltTwist(base,{alpha:0,beta:0,gamma:25}))<0.02,'gamma roll pollutes');
+});
+T('tilt: works from a landscape grip',()=>{
+  const base={alpha:90,beta:0,gamma:45};
+  const now={alpha:100.73,beta:10.55,gamma:44.01};
+  const w=M.tiltTwist(base,now);
+  ok(Math.abs(w-Math.sin(15*Math.PI/180))<0.02,'twist='+w);
+});
+T('tilt: same sign on both landscape sides',()=>{
+  const l90=M.tiltTwist({alpha:90,beta:0,gamma:45},{alpha:100.73,beta:10.55,gamma:44.01});
+  const l270=M.tiltTwist({alpha:-90,beta:0,gamma:-45},{alpha:-79.27,beta:-10.55,gamma:-44.01});
+  ok(l90>0.2&&l270>0.2,'twists '+l90.toFixed(3)+' / '+l270.toFixed(3));
+  ok(M.tiltSteerFromTwist(l90)<0&&M.tiltSteerFromTwist(l270)<0,'steer sign differs by side');
+});
+T('tilt: steer sign, deadzone and clamp',()=>{
+  ok(M.tiltSteerFromTwist(0.03)===0,'deadzone');
+  ok(M.tiltSteerFromTwist(0.2)<0,'left twist should steer left (negative)');
+  ok(M.tiltSteerFromTwist(-0.2)>0,'right twist should steer right (positive)');
+  ok(M.tiltSteerFromTwist(0.9)===-1&&M.tiltSteerFromTwist(-0.9)===1,'clamp');
+  ok(M.Tilt&&M.Tilt.enabled===true&&M.Tilt.base===null,'Tilt defaults');
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
