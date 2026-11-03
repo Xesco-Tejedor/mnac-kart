@@ -54,4 +54,4 @@ Les monedes romàniques (màx. 10) pugen la velocitat punta. Les fletxes ambre s
 
 `index.html` + `styles.css` + `game.js` (sense dependències ni build).
 Render Mode 7 per línies d'escaneig sobre `<canvas>`, so WebAudio generatiu.
-`tests.html` executa la bateria automàtica de mecàniques (22 proves).
+`tests.html` executa la bateria automàtica de mecàniques (32 proves).
