@@ -35,6 +35,8 @@ html,body{height:100%;background:#000;overflow:hidden;font-family:"Space Grotesk
 .tbtn.action.big{width:clamp(66px,17vw,100px);height:clamp(66px,17vw,100px)}
 .tbtn.action.small{width:clamp(48px,12vw,70px);height:clamp(48px,12vw,70px);font-size:11px}
 .tbtn.active{background:rgba(255,176,0,.45);color:#140d06}
+.tbtn.tilt{width:clamp(46px,11vw,66px);height:clamp(34px,9vw,48px);font-size:clamp(8px,2vw,10px);align-self:flex-end;margin-bottom:8px}
+.tbtn.tilt.off{opacity:.4;border-style:dashed}
 /* corner buttons */
 .cornerBtn{position:fixed;top:10px;left:10px;z-index:50;width:40px;height:40px;border-radius:10px;
   border:2px solid rgba(255,176,0,.5);background:rgba(20,13,6,.6);color:var(--amber);font-size:17px;cursor:pointer}
