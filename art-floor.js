@@ -41,10 +41,11 @@ function paintMap(mc,o){
   for(let j=0;j<H;j++)for(let i=0;i<W;i++){
     if(!roadish(tiles[j][i]))continue;
     const px=i*TS,py=j*TS,W_=(a,b)=>tt(a,b)===T.WALL;
-    if(!roadish(tt(i,j-1))){if(W_(i,j-1)){x.fillStyle='rgba(0,0,0,.35)';x.fillRect(px,py,TS,e);}else stripe(px,py,true,i);x.fillStyle=th.inlay;x.fillRect(px,py+e,TS,1.5);}
-    if(!roadish(tt(i,j+1))){if(W_(i,j+1)){x.fillStyle='rgba(0,0,0,.35)';x.fillRect(px,py+TS-e,TS,e);}else stripe(px,py+TS-e,true,i);x.fillStyle=th.inlay;x.fillRect(px,py+TS-e-1.5,TS,1.5);}
-    if(!roadish(tt(i-1,j))){if(W_(i-1,j)){x.fillStyle='rgba(0,0,0,.35)';x.fillRect(px,py,e,TS);}else stripe(px,py,false,j);x.fillStyle=th.inlay;x.fillRect(px+e,py,1.5,TS);}
-    if(!roadish(tt(i+1,j))){if(W_(i+1,j)){x.fillStyle='rgba(0,0,0,.35)';x.fillRect(px+TS-e,py,e,TS);}else stripe(px+TS-e,py,false,j);x.fillStyle=th.inlay;x.fillRect(px+TS-e-1.5,py,1.5,TS);}
+    /* kerb stripe at EVERY road edge; a dark lip is added on the wall side so walls read as solid */
+    if(!roadish(tt(i,j-1))){stripe(px,py,true,i);if(W_(i,j-1)){x.fillStyle='rgba(0,0,0,.4)';x.fillRect(px,py,TS,e/2);}x.fillStyle=th.inlay;x.fillRect(px,py+e,TS,1.5);}
+    if(!roadish(tt(i,j+1))){stripe(px,py+TS-e,true,i);if(W_(i,j+1)){x.fillStyle='rgba(0,0,0,.4)';x.fillRect(px,py+TS-e/2,TS,e/2);}x.fillStyle=th.inlay;x.fillRect(px,py+TS-e-1.5,TS,1.5);}
+    if(!roadish(tt(i-1,j))){stripe(px,py,false,j);if(W_(i-1,j)){x.fillStyle='rgba(0,0,0,.4)';x.fillRect(px,py,e/2,TS);}x.fillStyle=th.inlay;x.fillRect(px+e,py,1.5,TS);}
+    if(!roadish(tt(i+1,j))){stripe(px+TS-e,py,false,j);if(W_(i+1,j)){x.fillStyle='rgba(0,0,0,.4)';x.fillRect(px+TS-e/2,py,e/2,TS);}x.fillStyle=th.inlay;x.fillRect(px+TS-e-1.5,py,1.5,TS);}
   }
   for(let j=0;j<H;j++)for(let i=0;i<W;i++){
     const t=tiles[j][i],px=i*TS,py=j*TS,cx=px+TS/2,cy=py+TS/2;
