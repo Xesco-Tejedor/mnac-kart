@@ -13,6 +13,11 @@ html,body{height:100%;background:#000;overflow:hidden;font-family:"Space Grotesk
   touch-action:none;user-select:none;-webkit-user-select:none;
 }
 .hidden{display:none!important}
+/* suppress long-press text selection & callouts on all game UI */
+#touchUI,#touchUI *,.cornerBtn,#rotateHint,#rotateHint *,#uiLayer,#uiLayer *{
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+}
+#touchUI .tbtn{touch-action:none}
 /* rotate hint */
 #rotateHint{position:fixed;inset:0;background:rgba(8,5,2,.96);z-index:60;display:flex;align-items:center;justify-content:center}
 .rotateCard{text-align:center;color:var(--ink);padding:24px;border:2px solid var(--amber);border-radius:12px;background:var(--panel)}
