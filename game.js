@@ -1716,7 +1716,7 @@ document.addEventListener('dragstart',e=>{e.preventDefault();});
    against a baseline captured at race start, so it is pose- and
    landscape-side-independent: the steering signal is the twist about the
    screen normal, which forward/back lean never pollutes. */
-const Orient={locked:false,rotated:false};
+const Orient={locked:false,rotated:false,rot:0,base:null,lastA:0};
 const Tilt={supported:false,enabled:true,active:false,base:null,steer:0,pedal:0};
 const TILT_MAX_DEG=24;          /* twist for full lock */
 const TILT_DEAD=0.06;           /* deadzone in twist units (~3.5deg) */
@@ -1735,13 +1735,17 @@ function tiltAxes(base,now){
      axes: [0] about device-x, [1] about device-y, [2] about screen normal */
   if(!base||!now)return [0,0,0];
   const A=tiltMat(base.alpha,base.beta,base.gamma),B=tiltMat(now.alpha,now.beta,now.gamma);
-  let r10=0,r01=0,r21=0,r12=0,r02=0,r20=0;
+  let r10=0,r01=0,r21=0,r12=0,r02=0,r20=0,r00=0,r11=0,r22=0;
   for(let k=0;k<3;k++){
+    r00+=A[k][0]*B[k][0];r11+=A[k][1]*B[k][1];r22+=A[k][2]*B[k][2];
     r10+=A[k][1]*B[k][0];r01+=A[k][0]*B[k][1];
     r21+=A[k][2]*B[k][1];r12+=A[k][1]*B[k][2];
     r02+=A[k][0]*B[k][2];r20+=A[k][2]*B[k][0];
   }
-  return [(r21-r12)/2,(r02-r20)/2,(r10-r01)/2];
+  /* sin() of a rotation falls again past 90deg: leaning the phone nearly
+     face-away would drop the throttle. Past a quarter turn, hold full scale. */
+  const sat=(s,c)=>c<0?(s>=0?1:-1):s;
+  return [sat((r21-r12)/2,(r11+r22)/2),sat((r02-r20)/2,(r00+r22)/2),sat((r10-r01)/2,(r00+r11)/2)];
 }
 function tiltTwist(base,now){ return tiltAxes(base,now)[2]; }
 function tiltSteerFromTwist(w){
@@ -1761,8 +1765,12 @@ function tiltEffectiveAngle(){
   /* the CSS-rotated fallback draws the game 90deg turned inside a portrait
      window: the pedal lean must be read against the content's orientation,
      not the OS one (the twist about the screen normal needs no adjustment) */
+  /* mid-race the OS may auto-rotate while the phone tilts: the device axes
+     keep their meaning for the player, so use the angle latched at race start */
+  if(Game.state==='race'&&!Orient.locked&&Orient.base!==null&&Orient.base!==undefined)return Orient.base;
   return (screenAngleDeg()+(Orient.rotated?90:0))%360;
 }
+function orientRot(b,a){return (((b-a)%360)+360)%360;}
 function tiltLeanFromAxes(w,angDeg){
   /* forward/back lean of the screen's top edge, landscape-side independent:
      +1 = top edge comes toward the player (brake), -1 = away (accelerate) */
@@ -1837,7 +1845,7 @@ function setupTouch(){
 function updateRotateHint(){
   fitCanvas(); /* keeps Orient.rotated in sync with state + viewport */
   const portrait=window.innerHeight>window.innerWidth;
-  const show=Game.touchMode&&portrait&&Game.state==='race'&&!Orient.rotated&&!Orient.locked;
+  const show=Game.touchMode&&portrait&&Game.state==='race'&&!Orient.rot&&!Orient.locked;
   document.getElementById('rotateHint').classList.toggle('hidden',!show);
 }
 
@@ -1877,9 +1885,19 @@ function fitCanvas(){
   const ox=vv?vv.offsetLeft:0, oy=vv?vv.offsetTop:0;
   /* portrait mid-race without a real lock: rotate the whole frame instead of
      letting the rotate card take the screen */
-  const rotated=Game.touchMode&&Game.state==='race'&&!Orient.locked&&vh0>vw0;
-  Orient.rotated=rotated;
-  const vw=rotated?vh0:vw0, vh=rotated?vw0:vh0;
+  const racing=Game.touchMode&&Game.state==='race'&&!Orient.locked;
+  const ang=screenAngleDeg();
+  if(!racing)Orient.base=null;
+  else if(Orient.base===null||Orient.base===undefined)Orient.base=vw0>=vh0?ang:(ang+90)%360;
+  Orient.lastA=ang;
+  /* OS auto-rotation caused by tilting (even a 180deg flip) is undone by
+     turning the frame back to the orientation the player started in */
+  const rot=racing?orientRot(Orient.base,ang):0;
+  const swapped=rot===90||rot===270;
+  const rotated=rot!==0;
+  Orient.rot=rot;
+  Orient.rotated=swapped;
+  const vw=swapped?vh0:vw0, vh=swapped?vw0:vh0;
   const s=Math.min(vw/16,vh/9);
   canvas.style.width=Math.max(1,Math.floor(s*16))+'px';
   canvas.style.height=Math.max(1,Math.floor(s*9))+'px';
@@ -1891,10 +1909,10 @@ function fitCanvas(){
   const fr=document.getElementById('frame');
   if(fr){
     if(rotated){
-      fr.style.transform='rotate(90deg)';
-      fr.style.left=(ox+(vw0-vh0)/2)+'px';
-      fr.style.top=(oy+(vh0-vw0)/2)+'px';
-      fr.style.width=vh0+'px'; fr.style.height=vw0+'px';
+      fr.style.transform='rotate('+rot+'deg)';
+      fr.style.left=(ox+(swapped?(vw0-vh0)/2:0))+'px';
+      fr.style.top=(oy+(swapped?(vh0-vw0)/2:0))+'px';
+      fr.style.width=vw+'px'; fr.style.height=vh+'px';
     }else{
       fr.style.transform='';
       fr.style.left=ox+'px'; fr.style.top=oy+'px';
@@ -1939,6 +1957,7 @@ function frame(t){
   fpsAvg=fpsAvg*0.95+(dt*1000)*0.05;
   Game.rowStep=fpsAvg>26?2:1;
   acc+=dt;
+  if(((Game.state==='race'&&Game.touchMode&&!Orient.locked)!==(Orient.base!==null))||screenAngleDeg()!==Orient.lastA)fitCanvas();
   while(acc>=DT){
     acc-=DT;
     refreshSteer();
@@ -1990,6 +2009,6 @@ window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,touch,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
   startRace,startGP,showTitle,showCC,showChars,showTracks,showGuide,TILE,
   drawRace,drawHUD,renderWorld,
-  fitCanvas,updateRotateHint,Orient,orientRequestLock,orientRelease,tiltEffectiveAngle,screenAngleDeg,
+  fitCanvas,updateRotateHint,Orient,orientRot,orientRequestLock,orientRelease,tiltEffectiveAngle,screenAngleDeg,
   T_OFFROAD,T_ROAD,T_WALL,T_BOOST,T_ITEM,T_START,T_COIN};
 })();
