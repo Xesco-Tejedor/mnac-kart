@@ -1754,13 +1754,32 @@ const ctx=canvas.getContext('2d');
 function fitCanvas(){
   const vv=window.visualViewport;
   const vw=vv?vv.width:window.innerWidth, vh=vv?vv.height:window.innerHeight;
+  const ox=vv?vv.offsetLeft:0, oy=vv?vv.offsetTop:0;
   const s=Math.min(vw/16,vh/9);
   canvas.style.width=Math.max(1,Math.floor(s*16))+'px';
   canvas.style.height=Math.max(1,Math.floor(s*9))+'px';
+  /* Anchor the fixed UI layers to the VISIBLE rect, not the layout viewport:
+     mobile browser bars overlay fixed-position content, which could push the
+     touch controls under the bar. Track visualViewport (+ scroll offsets). */
+  ['frame','touchUI','uiLayer','rotateHint'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.style.left=ox+'px'; el.style.top=oy+'px';
+    el.style.width=vw+'px'; el.style.height=vh+'px';
+    el.style.right='auto'; el.style.bottom='auto';
+  });
+  const bs=document.getElementById('btnSound'), bg=document.getElementById('btnGuide');
+  if(!bs||!bg)return;
+  bs.style.left=(ox+10)+'px'; bs.style.top=(oy+10)+'px';
+  bg.style.left='auto'; bg.style.right='auto';
+  bg.style.left=(ox+vw-bg.offsetWidth-10)+'px'; bg.style.top=(oy+10)+'px';
 }
 window.addEventListener('resize',fitCanvas);
 window.addEventListener('orientationchange',fitCanvas);
-if(window.visualViewport)window.visualViewport.addEventListener('resize',fitCanvas);
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',fitCanvas);
+  window.visualViewport.addEventListener('scroll',fitCanvas);
+}
 fitCanvas();
 ctx.imageSmoothingEnabled=false;
 let last=0,acc=0,fpsAvg=16;
