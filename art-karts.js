@@ -158,5 +158,50 @@ function portrait(d){
   x.strokeStyle='#ffd75e';x.lineWidth=2;x.strokeRect(1,1,S-2,S-2);x.strokeStyle='rgba(0,0,0,.5)';x.lineWidth=1;x.strokeRect(2.5,2.5,S-5,S-5);
   return c;
 }
-A.kart=kart;A.portrait=portrait;
+/* --- rescue bat: three fast-flap poses (wings up / mid / down) --- */
+let _batFrames=null;
+function rescueBatFrames(){
+  if(_batFrames)return _batFrames;
+  const W=84,H=64;
+  _batFrames=[-0.5,0.05,0.65].map(ang=>{
+    const c=cv(W,H),x=c.getContext('2d');
+    x.lineJoin='round';x.lineCap='round';
+    /* wings behind the body, rotated through the flap pose */
+    [-1,1].forEach(s=>{
+      x.save();x.translate(42+s*6,30);x.rotate(s*ang);
+      batWing(x,0,0,s,'#4a3a5e','#241a30');
+      x.restore();
+    });
+    /* furry body */
+    ell(x,42,38,10.5,13);
+    x.fillStyle=rg(x,40,34,2,26,[[0,'#5d4a74'],[.7,'#43335a'],[1,'#2c2138']]);x.fill();
+    x.strokeStyle='#1c1426';x.lineWidth=1.2;x.stroke();
+    /* pointy ears */
+    [-1,1].forEach(s=>{
+      x.beginPath();x.moveTo(42+s*4,27);x.lineTo(42+s*10,16);x.lineTo(42+s*11,28);x.closePath();
+      x.fillStyle='#43335a';x.fill();x.strokeStyle='#1c1426';x.lineWidth=1;x.stroke();
+      x.beginPath();x.moveTo(42+s*6.4,25.5);x.lineTo(42+s*9,20.5);x.lineTo(42+s*9.4,26.5);x.closePath();
+      x.fillStyle='#d98a9e';x.fill();
+    });
+    /* amber eyes */
+    [-1,1].forEach(s=>{
+      ell(x,42+s*4.5,34,2.4,2.6);x.fillStyle='#ffd040';x.fill();
+      ell(x,42+s*4.7,34.2,1.1,1.3);x.fillStyle='#180a20';x.fill();
+    });
+    /* snout and fangs */
+    ell(x,42,40.5,3.4,2.6);x.fillStyle='#6a557f';x.fill();
+    [-1,1].forEach(s=>{
+      x.beginPath();x.moveTo(42+s*2,42.6);x.lineTo(42+s*3.1,42.6);x.lineTo(42+s*2.5,45.6);x.closePath();
+      x.fillStyle='#fff4e0';x.fill();
+    });
+    /* little claws below: the grip that carries the kart */
+    [-1,1].forEach(s=>{
+      x.beginPath();x.moveTo(42+s*3.5,50);x.lineTo(42+s*3.5,54);x.moveTo(42+s*5.5,50);x.lineTo(42+s*6.5,54);
+      x.strokeStyle='#d9c8a8';x.lineWidth=1.4;x.stroke();
+    });
+    return c;
+  });
+  return _batFrames;
+}
+A.kart=kart;A.portrait=portrait;A.rescueBatFrames=rescueBatFrames;
 })();
