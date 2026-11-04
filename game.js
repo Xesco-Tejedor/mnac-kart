@@ -1671,11 +1671,12 @@ function refreshSteer(){
     s=clamp(s+Tilt.steer,-1-TILT_STEER_ADD,1+TILT_STEER_ADD);
     Input.throttle=Tilt.pedal;
   }
+  if(keys.ArrowUp||keys.KeyW||touch.gas)Input.throttle=1;
   Input.steer=s;
   Input.brake=!!(keys.ArrowDown||keys.KeyS||touch.brake);
   Input.drift=!!(keys.Space||keys.ShiftLeft||keys.ShiftRight||touch.drift);
 }
-const touch={left:false,right:false,drift:false,brake:false};
+const touch={left:false,right:false,drift:false,brake:false,gas:false};
 function bindHold(id,prop){
   const b=document.getElementById(id);
   const on=e=>{e.preventDefault();Audio8.resume();touch[prop]=true;b.classList.add('active');};
@@ -1807,7 +1808,7 @@ function updateTiltBtn(){
 function setupTouch(){
   Game.touchMode=('ontouchstart'in window)||navigator.maxTouchPoints>0||/touch=1/.test(location.search);
   bindHold('btnLeft','left');bindHold('btnRight','right');
-  bindHold('btnDrift','drift');bindHold('btnBrake','brake');
+  bindHold('btnDrift','drift');bindHold('btnBrake','brake');bindHold('btnGas','gas');
   const bt=document.getElementById('btnTilt');
   if(bt)bt.addEventListener('pointerdown',e=>{
     e.preventDefault();Audio8.resume();
