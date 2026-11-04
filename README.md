@@ -55,8 +55,14 @@ Ales de Serafí (turbo) · Escut del Capitell (protecció)
 
 Les monedes romàniques (màx. 10) pugen la velocitat punta. Les fletxes ambre són turbos.
 
+## Contacte sòlid
+
+Els karts no es travessen: ni entre ells ni amb les parets. Si mantens premut
+contra un rival, l'empeny sense enfonsar-t'hi; contra una paret, rellisques o
+reboten, però mai hi quedes encastat ni la travesses a poc a poc.
+
 ## Tècnic
 
 `index.html` + `styles.css` + `game.js` (sense dependències ni build).
 Render Mode 7 per línies d'escaneig sobre `<canvas>`, so WebAudio generatiu.
-`tests.html` executa la bateria automàtica de mecàniques (50 proves).
+`tests.html` executa la bateria automàtica de mecàniques (53 proves).
