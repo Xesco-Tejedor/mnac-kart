@@ -158,46 +158,64 @@ function portrait(d){
   x.strokeStyle='#ffd75e';x.lineWidth=2;x.strokeRect(1,1,S-2,S-2);x.strokeStyle='rgba(0,0,0,.5)';x.lineWidth=1;x.strokeRect(2.5,2.5,S-5,S-5);
   return c;
 }
-/* --- rescue bat: three fast-flap poses (wings up / mid / down) --- */
+/* --- rescue bat: three fast-flap poses (wings up / mid / down), sinister version --- */
 let _batFrames=null;
+function scaryWing(x,side){
+  x.save();x.scale(side,1);
+  x.beginPath();x.moveTo(0,-2);x.lineTo(21,-18);x.lineTo(43,-13);x.lineTo(31,-5);x.lineTo(42,7);x.lineTo(27,3);
+  x.lineTo(31,19);x.lineTo(16,8);x.lineTo(9,20);x.lineTo(0,11);x.closePath();
+  x.fillStyle=lg(x,0,0,43,0,[[0,'#2a1636'],[.6,'#1a0f24'],[1,'#3a0f1c']]);x.fill();
+  x.strokeStyle='#07030b';x.lineWidth=1.4;x.stroke();
+  x.strokeStyle='#7a1e30';x.lineWidth=1.2;
+  x.beginPath();x.moveTo(0,-1);x.lineTo(21,-18);x.moveTo(21,-18);x.lineTo(43,-13);x.moveTo(21,-18);x.lineTo(42,7);
+  x.moveTo(21,-18);x.lineTo(31,19);x.moveTo(8,5);x.lineTo(9,20);x.stroke();
+  /* claw at the wrist */
+  x.beginPath();x.moveTo(21,-18);x.lineTo(25,-24);x.lineTo(23,-17);x.fillStyle='#d9c8a8';x.fill();
+  x.restore();
+}
 function rescueBatFrames(){
   if(_batFrames)return _batFrames;
   const W=84,H=64;
   _batFrames=[-0.5,0.05,0.65].map(ang=>{
     const c=cv(W,H),x=c.getContext('2d');
-    x.lineJoin='round';x.lineCap='round';
-    /* wings behind the body, rotated through the flap pose */
+    x.lineJoin='miter';x.lineCap='round';
     [-1,1].forEach(s=>{
       x.save();x.translate(42+s*6,30);x.rotate(s*ang);
-      batWing(x,0,0,s,'#4a3a5e','#241a30');
+      scaryWing(x,s);
       x.restore();
     });
-    /* furry body */
-    ell(x,42,38,10.5,13);
-    x.fillStyle=rg(x,40,34,2,26,[[0,'#5d4a74'],[.7,'#43335a'],[1,'#2c2138']]);x.fill();
-    x.strokeStyle='#1c1426';x.lineWidth=1.2;x.stroke();
-    /* pointy ears */
+    /* gaunt body */
+    ell(x,42,38,9.5,13.5);
+    x.fillStyle=rg(x,40,34,2,26,[[0,'#3a2548'],[.7,'#24162f'],[1,'#0f0816']]);x.fill();
+    x.strokeStyle='#050208';x.lineWidth=1.3;x.stroke();
+    /* tall jagged ears */
     [-1,1].forEach(s=>{
-      x.beginPath();x.moveTo(42+s*4,27);x.lineTo(42+s*10,16);x.lineTo(42+s*11,28);x.closePath();
-      x.fillStyle='#43335a';x.fill();x.strokeStyle='#1c1426';x.lineWidth=1;x.stroke();
-      x.beginPath();x.moveTo(42+s*6.4,25.5);x.lineTo(42+s*9,20.5);x.lineTo(42+s*9.4,26.5);x.closePath();
-      x.fillStyle='#d98a9e';x.fill();
+      x.beginPath();x.moveTo(42+s*3,28);x.lineTo(42+s*7,12);x.lineTo(42+s*8.5,20);x.lineTo(42+s*12,15);x.lineTo(42+s*11,29);x.closePath();
+      x.fillStyle='#24162f';x.fill();x.strokeStyle='#050208';x.lineWidth=1;x.stroke();
     });
-    /* amber eyes */
+    /* glowing red eyes under angry brows */
+    x.save();x.shadowColor='#ff2020';x.shadowBlur=7;
     [-1,1].forEach(s=>{
-      ell(x,42+s*4.5,34,2.4,2.6);x.fillStyle='#ffd040';x.fill();
-      ell(x,42+s*4.7,34.2,1.1,1.3);x.fillStyle='#180a20';x.fill();
+      x.beginPath();x.moveTo(42+s*2,35.5);x.lineTo(42+s*7.5,32.5);x.lineTo(42+s*7,36.5);x.lineTo(42+s*3,37.5);x.closePath();
+      x.fillStyle='#ff3030';x.fill();
     });
-    /* snout and fangs */
-    ell(x,42,40.5,3.4,2.6);x.fillStyle='#6a557f';x.fill();
+    x.restore();
     [-1,1].forEach(s=>{
-      x.beginPath();x.moveTo(42+s*2,42.6);x.lineTo(42+s*3.1,42.6);x.lineTo(42+s*2.5,45.6);x.closePath();
-      x.fillStyle='#fff4e0';x.fill();
+      ell(x,42+s*5,35,.9,1.5);x.fillStyle='#200000';x.fill();
+      x.strokeStyle='#050208';x.lineWidth=1.6;
+      x.beginPath();x.moveTo(42+s*1.5,32.5);x.lineTo(42+s*8.5,30.5);x.stroke();
     });
-    /* little claws below: the grip that carries the kart */
+    /* snarling mouth with long fangs */
+    x.beginPath();x.moveTo(37.5,40);x.lineTo(46.5,40);x.lineTo(44,46.5);x.lineTo(42,44.5);x.lineTo(40,46.5);x.closePath();
+    x.fillStyle='#3a0610';x.fill();x.strokeStyle='#050208';x.lineWidth=.9;x.stroke();
     [-1,1].forEach(s=>{
-      x.beginPath();x.moveTo(42+s*3.5,50);x.lineTo(42+s*3.5,54);x.moveTo(42+s*5.5,50);x.lineTo(42+s*6.5,54);
-      x.strokeStyle='#d9c8a8';x.lineWidth=1.4;x.stroke();
+      x.beginPath();x.moveTo(42+s*3.6,40);x.lineTo(42+s*1.8,40);x.lineTo(42+s*2.7,47.5);x.closePath();
+      x.fillStyle='#fff8ec';x.fill();
+    });
+    /* talons: the grip that carries the kart */
+    [-1,1].forEach(s=>{
+      x.strokeStyle='#cbb894';x.lineWidth=1.6;
+      x.beginPath();x.moveTo(42+s*3.5,50);x.lineTo(42+s*2.5,55);x.moveTo(42+s*5.5,50);x.lineTo(42+s*7.2,55);x.stroke();
     });
     return c;
   });
