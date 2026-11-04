@@ -651,6 +651,80 @@ T('orientation: OS flips are undone, tilt axes keep the starting orientation',()
     ok(M.tiltEffectiveAngle()===(b+90)%360,'effective angle follows latched start');
   }finally{ M.Game.state=st; M.Game.touchMode=tm; M.Orient.base=null; M.fitCanvas(); }
 });
+T('bat: sprite frames painted (3 flap poses)',()=>{
+  const fr=window.MNACArt.rescueBatFrames();
+  ok(fr.length===3,'frames '+fr.length);
+  fr.forEach((f,i)=>{
+    const d=f.getContext('2d').getImageData(0,0,f.width,f.height).data;
+    let solid=0; for(let p=3;p<d.length;p+=4) if(d[p]>0) solid++;
+    ok(solid>200,'frame '+i+' looks blank');
+  });
+});
+T('bat: appears when a kart stays stuck off the road',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  ok(M.tileAt(r.track,6.5*M.TILE,6.5*M.TILE)===M.T_OFFROAD,'spot not offroad');
+  k.x=6.5*M.TILE;k.y=6.5*M.TILE;k.speed=0;
+  let seen=null;
+  for(let i=0;i<150&&!seen;i++){
+    if(!k.rescue){k.x=6.5*M.TILE;k.y=6.5*M.TILE;k.speed=0;} /* pinned in place */
+    M.stepRace(r,DT,IN); seen=k.rescue;
+  }
+  ok(!!seen,'no rescue after 2.5s stuck offroad');
+  ok(seen.phase==='in'||seen.phase==='carry','odd phase '+seen.phase);
+});
+T('bat: carries the kart back onto the road',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  k.x=6.5*M.TILE;k.y=6.5*M.TILE;k.speed=0;
+  let started=false,done=false;
+  for(let i=0;i<600;i++){
+    M.stepRace(r,DT,IN);
+    if(k.rescue)started=true;
+    else if(started){done=true;break;}
+  }
+  ok(started,'rescue never started');
+  ok(done,'rescue never finished');
+  const t=M.tileAt(r.track,k.x,k.y);
+  ok(t!==M.T_OFFROAD&&t!==M.T_WALL,'dropped on tile '+t);
+  ok(k.speed===0&&(k.liftAlt||0)===0,'not landed cleanly');
+});
+T('bat: leaves a kart that is just crossing the offroad',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  k.x=6.5*M.TILE;k.y=6.5*M.TILE;k.angle=0;k.dirAngle=0;k.speed=250;
+  for(let i=0;i<40;i++){ /* ~0.65s of real movement across the grass */
+    M.stepRace(r,DT,IN);
+    ok(!k.rescue,'rescue while moving, step '+i);
+  }
+});
+T('wrongway: sustained contra-direction shows the U-turn warning',()=>{
+  const r=mkRace(0,0,'tt'); const k=r.karts.find(x=>x.isPlayer);
+  k.x=(15+0.5)*M.TILE;k.y=(25+0.5)*M.TILE;k.angle=Math.PI;k.dirAngle=Math.PI;k.speed=250;
+  let seen=false;
+  for(let i=0;i<150;i++){ M.stepRace(r,DT,IN); if(k.wrongWay)seen=true; }
+  ok(seen,'no wrong-way warning driving backwards');
+});
+T('wrongway: clears right after recovering the correct heading',()=>{
+  const r=mkRace(0,0,'tt'); const k=r.karts.find(x=>x.isPlayer);
+  k.x=(15+0.5)*M.TILE;k.y=(25+0.5)*M.TILE;k.angle=Math.PI;k.dirAngle=Math.PI;k.speed=250;
+  let steps=0;
+  while(!k.wrongWay&&steps<200){ M.stepRace(r,DT,IN); steps++; }
+  ok(k.wrongWay,'not in wrong-way state after '+steps+' steps');
+  k.angle=0;k.dirAngle=0;
+  for(let i=0;i<30;i++){ M.stepRace(r,DT,IN); ok(!k.wrongWay,'warning stuck at step '+i); }
+});
+T('wrongway: no warning during normal forward driving',()=>{
+  const r=mkRace(0,0,'tt'); const k=r.karts.find(x=>x.isPlayer);
+  k.x=(15+0.5)*M.TILE;k.y=(25+0.5)*M.TILE;k.angle=0;k.dirAngle=0;k.speed=250;
+  for(let i=0;i<150;i++){ M.stepRace(r,DT,IN); ok(!k.wrongWay,'false positive at step '+i); }
+});
+T('fullscreen: corner button requests the real top layer',()=>{
+  const b=document.getElementById('btnFull'); ok(!!b,'no fullscreen button');
+  const el=document.documentElement, orig=el.requestFullscreen;
+  let called=0;
+  el.requestFullscreen=()=>{called++;return {catch:()=>{}};};
+  b.click();
+  el.requestFullscreen=orig;
+  ok(called===1,'requestFullscreen not called');
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
