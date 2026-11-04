@@ -65,4 +65,4 @@ reboten, però mai hi quedes encastat ni la travesses a poc a poc.
 
 `index.html` + `styles.css` + `game.js` (sense dependències ni build).
 Render Mode 7 per línies d'escaneig sobre `<canvas>`, so WebAudio generatiu.
-`tests.html` executa la bateria automàtica de mecàniques (56 proves).
+`tests.html` executa la bateria automàtica de mecàniques (57 proves).
