@@ -603,6 +603,25 @@ T('contact: pressing into a wall all race never enters it',()=>{
     ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R*0.98),'in wall at step '+i+' x='+k.x.toFixed(1));
   }
 });
+T('audio: every song is well-formed for the arcade engine',()=>{
+  for(const [n,sg] of Object.entries(M.SONGS)){
+    ok(sg.tempo>=100&&sg.lead.length>0&&sg.bass.length>0,'bad song '+n);
+    for(const x of sg.lead.concat(sg.bass)) ok(x[0]>=0&&x[0]<=100&&x[1]>=1,'bad note in '+n);
+  }
+});
+T('audio: all sfx names play without error and engine drone starts/stops',()=>{
+  const A=M.Audio8; A.init(); if(!A.ctx) return;
+  const was=A.enabled; A.enabled=true;
+  ['coin','item','hit','spin','boost','drift','hop','select','back','count','go','lap','finish','podium','shield','throw','record','bump','offroad'].forEach(n=>A.sfx(n));
+  A.engine(0.5); ok(!!A.eng,'engine not created');
+  A.engineOff(); ok(!A.eng,'engine not stopped');
+  A.enabled=was;
+});
+T('audio: engine fades out when not refreshed',()=>{
+  const A=M.Audio8; if(!A.ctx) return;
+  A.enabled=true; A.engine(0.4); A.engT=performance.now()-1000; A.engineWatch();
+  ok(!A.eng,'engine kept running');
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
