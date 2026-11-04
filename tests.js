@@ -622,6 +622,13 @@ T('audio: engine fades out when not refreshed',()=>{
   A.enabled=true; A.engine(0.4); A.engT=performance.now()-1000; A.engineWatch();
   ok(!A.eng,'engine kept running');
 });
+T('gas button: exists, holds and releases throttle',()=>{
+  const b=document.getElementById('btnGas'); ok(!!b,'no gas button');
+  b.dispatchEvent(new Event('pointerdown',{cancelable:true}));
+  ok(b.classList.contains('active'),'gas not active on press');
+  b.dispatchEvent(new Event('pointerup',{cancelable:true}));
+  ok(!b.classList.contains('active'),'gas stuck after release');
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
