@@ -439,6 +439,31 @@ T('throttle: tilt forward speeds acceleration, tilt back brakes',()=>{
   for(let i=0;i<30;i++) M.stepKart(k,{steer:0,brake:false,drift:false,item:false,throttle:-1},r.track,DT,1,r);
   ok(k.speed<120,'tilt brake='+k.speed.toFixed(0));
 });
+T('viewport: canvas fits visible area at 16:9',()=>{
+  const cv=document.getElementById('game');
+  M.fitCanvas();
+  const w=parseFloat(cv.style.width),h=parseFloat(cv.style.height);
+  ok(w>0&&h>0,'no inline size');
+  ok(Math.abs(w/h-16/9)<0.02,'ratio '+(w/h));
+  const vv=window.visualViewport;
+  const vw=vv?vv.width:window.innerWidth, vh=vv?vv.height:window.innerHeight;
+  ok(w<=vw+1&&h<=vh+1,'overflow '+w+'x'+h+' in '+vw+'x'+vh);
+});
+T('viewport: refit shrinks when visible height shrinks',()=>{
+  const cv=document.getElementById('game');
+  const realVV=window.visualViewport;
+  const fake={width:800,height:300,addEventListener(){}};
+  try{
+    Object.defineProperty(window,'visualViewport',{value:fake,configurable:true});
+    M.fitCanvas();
+    const w=parseFloat(cv.style.width),h=parseFloat(cv.style.height);
+    ok(h<=300,'still cropped h='+h);
+    ok(Math.abs(w/h-16/9)<0.02,'ratio '+(w/h));
+  }finally{
+    Object.defineProperty(window,'visualViewport',{value:realVV,configurable:true});
+    M.fitCanvas();
+  }
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
