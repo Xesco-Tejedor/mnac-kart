@@ -1255,7 +1255,7 @@ function menuEnter(){
 }
 
 function showTitle(){
-  Game.state='title'; startAttract();
+  Game.state='title'; orientRelease(); startAttract(); updateRotateHint();
   clearUI();
   const card=el('div','uiCard titleCard');
   const logo=el('div','logoWrap');
@@ -1542,6 +1542,7 @@ function startRace(){
   tiltRecalibrate();
   if(Game.touchMode)document.getElementById('touchUI').classList.remove('hidden');
   Audio8.playSong(SONGS[track.def.song]);
+  orientRequestLock();
   updateRotateHint();
 }
 function startGP(){
@@ -1557,6 +1558,7 @@ function endRaceFlow(){
   }
   Game.state='results';
   document.getElementById('touchUI').classList.add('hidden');
+  updateRotateHint();
   showResults(race);
 }
 
@@ -1628,6 +1630,7 @@ document.addEventListener('dragstart',e=>{e.preventDefault();});
    against a baseline captured at race start, so it is pose- and
    landscape-side-independent: the steering signal is the twist about the
    screen normal, which forward/back lean never pollutes. */
+const Orient={locked:false,rotated:false};
 const Tilt={supported:false,enabled:true,active:false,base:null,steer:0,pedal:0};
 const TILT_MAX_DEG=24;          /* twist for full lock */
 const TILT_DEAD=0.06;           /* deadzone in twist units (~3.5deg) */
@@ -1668,6 +1671,12 @@ function screenAngleDeg(){
   }catch(e){}
   return ((a%360)+360)%360;
 }
+function tiltEffectiveAngle(){
+  /* the CSS-rotated fallback draws the game 90deg turned inside a portrait
+     window: the pedal lean must be read against the content's orientation,
+     not the OS one (the twist about the screen normal needs no adjustment) */
+  return (screenAngleDeg()+(Orient.rotated?90:0))%360;
+}
 function tiltLeanFromAxes(w,angDeg){
   /* forward/back lean of the screen's top edge, landscape-side independent:
      +1 = top edge comes toward the player (brake), -1 = away (accelerate) */
@@ -1699,7 +1708,7 @@ window.addEventListener('deviceorientation',e=>{
   else{
     const ax=tiltAxes(Tilt.base,now);
     Tilt.steer=tiltSteerFromTwist(ax[2]);
-    Tilt.pedal=tiltPedalFromLean(tiltLeanFromAxes(ax));
+    Tilt.pedal=tiltPedalFromLean(tiltLeanFromAxes(ax,tiltEffectiveAngle()));
   }
   Tilt.active=true;
   updateTiltBtn();
@@ -1740,39 +1749,91 @@ function setupTouch(){
   window.addEventListener('resize',updateRotateHint);
 }
 function updateRotateHint(){
+  fitCanvas(); /* keeps Orient.rotated in sync with state + viewport */
   const portrait=window.innerHeight>window.innerWidth;
-  const show=Game.touchMode&&portrait&&Game.state==='race';
+  const show=Game.touchMode&&portrait&&Game.state==='race'&&!Orient.rotated&&!Orient.locked;
   document.getElementById('rotateHint').classList.toggle('hidden',!show);
 }
 
 /* ------------------------------- loop --------------------------------- */
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
+/* Tilting the phone to steer can make the OS auto-rotate the whole screen
+   mid-race ("la pantalla gira"). Defense in two layers:
+   1) real lock: fullscreen + Screen Orientation API (Chrome/Android);
+   2) CSS fallback where locks don't exist (iPhone Safari): keep the game
+      landscape by rotating #frame 90deg inside the portrait window. */
+function orientRequestLock(){
+  if(!Game.touchMode)return;
+  try{
+    let p=null;
+    if(document.documentElement.requestFullscreen)
+      p=document.documentElement.requestFullscreen({navigationUI:'hide'});
+    const lock=()=>{try{
+      if(window.screen&&screen.orientation&&screen.orientation.lock)
+        screen.orientation.lock('landscape').then(()=>{Orient.locked=true;},()=>{});
+    }catch(e){}};
+    if(p&&p.then)p.then(lock,lock);else lock();
+  }catch(e){}
+}
+function orientRelease(){
+  try{if(window.screen&&screen.orientation&&screen.orientation.unlock)screen.orientation.unlock();}catch(e){}
+  try{if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});}catch(e){}
+  Orient.locked=false;
+}
+
 /* Fit the 16:9 canvas inside the actually visible viewport. CSS vh units
    count space hidden under mobile browser chrome (URL bar / toolbars), which
    cropped the game in landscape; visualViewport reports the visible area. */
 function fitCanvas(){
   const vv=window.visualViewport;
-  const vw=vv?vv.width:window.innerWidth, vh=vv?vv.height:window.innerHeight;
+  const vw0=vv?vv.width:window.innerWidth, vh0=vv?vv.height:window.innerHeight;
   const ox=vv?vv.offsetLeft:0, oy=vv?vv.offsetTop:0;
+  /* portrait mid-race without a real lock: rotate the whole frame instead of
+     letting the rotate card take the screen */
+  const rotated=Game.touchMode&&Game.state==='race'&&!Orient.locked&&vh0>vw0;
+  Orient.rotated=rotated;
+  const vw=rotated?vh0:vw0, vh=rotated?vw0:vh0;
   const s=Math.min(vw/16,vh/9);
   canvas.style.width=Math.max(1,Math.floor(s*16))+'px';
   canvas.style.height=Math.max(1,Math.floor(s*9))+'px';
   /* Anchor the fixed UI layers to the VISIBLE rect, not the layout viewport:
      mobile browser bars overlay fixed-position content, which could push the
-     touch controls under the bar. Track visualViewport (+ scroll offsets). */
-  ['frame','touchUI','uiLayer','rotateHint'].forEach(id=>{
+     touch controls under the bar. Track visualViewport (+ scroll offsets).
+     In rotated mode the transform on #frame turns its fixed descendants into
+     frame-local boxes, so they get frame-local coordinates instead. */
+  const fr=document.getElementById('frame');
+  if(fr){
+    if(rotated){
+      fr.style.transform='rotate(90deg)';
+      fr.style.left=(ox+(vw0-vh0)/2)+'px';
+      fr.style.top=(oy+(vh0-vw0)/2)+'px';
+      fr.style.width=vh0+'px'; fr.style.height=vw0+'px';
+    }else{
+      fr.style.transform='';
+      fr.style.left=ox+'px'; fr.style.top=oy+'px';
+      fr.style.width=vw0+'px'; fr.style.height=vh0+'px';
+    }
+    fr.style.right='auto'; fr.style.bottom='auto';
+  }
+  ['touchUI','uiLayer','rotateHint'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
-    el.style.left=ox+'px'; el.style.top=oy+'px';
+    el.style.left=(rotated?0:ox)+'px'; el.style.top=(rotated?0:oy)+'px';
     el.style.width=vw+'px'; el.style.height=vh+'px';
     el.style.right='auto'; el.style.bottom='auto';
   });
   const bs=document.getElementById('btnSound'), bg=document.getElementById('btnGuide');
   if(!bs||!bg)return;
-  bs.style.left=(ox+10)+'px'; bs.style.top=(oy+10)+'px';
-  bg.style.left='auto'; bg.style.right='auto';
-  bg.style.left=(ox+vw-bg.offsetWidth-10)+'px'; bg.style.top=(oy+10)+'px';
+  if(rotated){
+    bs.style.left='10px'; bs.style.top='10px';
+    bg.style.right='auto';
+    bg.style.left=(vw-bg.offsetWidth-10)+'px'; bg.style.top='10px';
+  }else{
+    bs.style.left=(ox+10)+'px'; bs.style.top=(oy+10)+'px';
+    bg.style.left='auto'; bg.style.right='auto';
+    bg.style.left=(ox+vw0-bg.offsetWidth-10)+'px'; bg.style.top=(oy+10)+'px';
+  }
 }
 window.addEventListener('resize',fitCanvas);
 window.addEventListener('orientationchange',fitCanvas);
@@ -1843,6 +1904,6 @@ window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,touch,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
   startRace,startGP,showTitle,showCC,showChars,showTracks,showGuide,TILE,
   drawRace,drawHUD,renderWorld,
-  fitCanvas,
+  fitCanvas,updateRotateHint,Orient,orientRequestLock,orientRelease,tiltEffectiveAngle,screenAngleDeg,
   T_OFFROAD,T_ROAD,T_WALL,T_BOOST,T_ITEM,T_START,T_COIN};
 })();
