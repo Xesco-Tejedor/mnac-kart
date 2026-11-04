@@ -352,6 +352,93 @@ T('results: rival that finishes first ranks ahead of the player',()=>{
   ok(!p.finished,'player must not finish with the rival');
   ok(a.pos<p.pos,'finished rival pos='+a.pos+' player pos='+p.pos);
 });
+/* ---- solid scenery (decor) ---- */
+T('decor: margin scenery is solid, racing line stays open',()=>{
+  for(let ti=0;ti<4;ti++){
+    const tr=M.builtTrack(ti), def=tr.def, PAD=5;
+    const wpsO=def.wps.map(p=>[p[0]+PAD,p[1]+PAD]);
+    let solid=0;
+    for(const d of def.decor){
+      const tx=d[0]+PAD, ty=d[1]+PAD;
+      let dl=1/0;
+      for(let i=0;i<wpsO.length;i++){
+        const a=wpsO[i],b=wpsO[(i+1)%wpsO.length];
+        dl=Math.min(dl,M.segDist(tx+0.5,ty+0.5,a[0],a[1],b[0],b[1]));
+      }
+      if(dl>=0.95){ ok(tr.tiles[ty][tx]===M.T_WALL,'decor not solid: '+def.id+' '+d.join(',')); solid++; }
+    }
+    ok(solid>=2,'too few solid decor on '+def.id+': '+solid);
+  }
+});
+T('decor: kart cannot drive through a margin planta',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  /* vestibul planta at def tile [37,21] -> built tile [42,26], offroad margin */
+  ok(M.tileAt(r.track,(42+0.5)*M.TILE,(26+0.5)*M.TILE)===M.T_WALL,'planta tile not solid');
+  k.x=42*M.TILE-40; k.y=(26+0.5)*M.TILE; k.angle=0; k.dirAngle=0; k.speed=280;
+  for(let i=0;i<90;i++) M.stepKart(k,IN,r.track,DT,1,r);
+  ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R),'kart ended inside the planta');
+  ok(k.x<42*M.TILE-M.WALL_R+1,'kart crossed the planta: x='+k.x);
+});
+T('decor: no kart starts touching a solid tile',()=>{
+  for(let ti=0;ti<4;ti++){
+    const r=mkRace(ti,0);
+    for(const k of r.karts){
+      ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R),'grid kart in wall, track '+ti);
+    }
+  }
+});
+T('ai: full grid completes a lap on every track with solid decor',()=>{
+  for(let ti=0;ti<4;ti++){
+    const r=mkRace(ti,0); r.state='racing';
+    let steps=0;
+    while(steps<60*150 && !r.karts.every(k=>k.lap>=2||k.finished)){
+      for(const k of r.karts) M.stepKart(k,M.aiInput(k,r),r.track,DT,r.ccMult,r);
+      M.kartContacts(r);
+      steps++;
+    }
+    ok(r.karts.every(k=>k.lap>=2||k.finished),
+      'track '+ti+' AI did not lap in 150s: laps='+r.karts.map(k=>k.lap).join(','));
+  }
+});
+/* ---- tilt: combined steering + throttle/brake lean ---- */
+T('input: tilt adds to button steering',()=>{
+  M.Tilt.active=true; M.Tilt.enabled=true; M.Tilt.steer=0.6; M.Tilt.pedal=0;
+  M.touch.right=true; M.refreshSteer();
+  ok(M.Input.steer>1.3&&M.Input.steer<=1.41,'button+tilt='+M.Input.steer);
+  M.Tilt.steer=-0.6; M.refreshSteer();
+  ok(Math.abs(M.Input.steer-0.4)<1e-9,'opposing tilt='+M.Input.steer);
+  M.touch.right=false; M.refreshSteer();
+  ok(Math.abs(M.Input.steer+0.6)<1e-9,'tilt only='+M.Input.steer);
+  M.Tilt.active=false; M.Tilt.steer=0; M.refreshSteer();
+  ok(M.Input.steer===0&&M.Input.throttle===0,'reset');
+});
+T('tilt: forward lean accelerates, backward brakes, both landscape sides',()=>{
+  const flat={alpha:0,beta:0,gamma:0};
+  const P=g=>M.tiltPedalFromLean(M.tiltLeanFromAxes(M.tiltAxes(flat,{alpha:0,beta:0,gamma:g}),90));
+  const P270=g=>M.tiltPedalFromLean(M.tiltLeanFromAxes(M.tiltAxes(flat,{alpha:0,beta:0,gamma:g}),270));
+  ok(P(20)>0.8,'l90: gamma+ (top edge away) should accelerate: '+P(20));
+  ok(P(-20)<-0.8,'l90: gamma- (top edge near) should brake: '+P(-20));
+  ok(P270(-20)>0.8,'l270: gamma- should accelerate: '+P270(-20));
+  ok(P270(20)<-0.8,'l270: gamma+ should brake: '+P270(20));
+  const B=b=>M.tiltPedalFromLean(M.tiltLeanFromAxes(M.tiltAxes(flat,{alpha:0,beta:b,gamma:0}),0));
+  ok(B(-20)>0.8,'portrait: top edge away should accelerate: '+B(-20));
+  ok(B(20)<-0.8,'portrait: top edge near should brake: '+B(20));
+  ok(M.tiltPedalFromLean(0.02)===0,'pedal deadzone');
+  ok(M.tiltPedalFromLean(-0.9)===1&&M.tiltPedalFromLean(0.9)===-1,'pedal clamp');
+  ok(M.Tilt.pedal===0,'Tilt.pedal default');
+});
+T('throttle: tilt forward speeds acceleration, tilt back brakes',()=>{
+  const r=mkRace(0,0), r2=mkRace(0,0);
+  const k=r.karts.find(x=>x.isPlayer), k2=r2.karts.find(x=>x.isPlayer);
+  k.x=k2.x=(15+0.5)*M.TILE; k.y=k2.y=(25+0.5)*M.TILE;
+  k.angle=k2.angle=0; k.dirAngle=k2.dirAngle=0;
+  const TH={steer:0,brake:false,drift:false,item:false,throttle:1};
+  for(let i=0;i<60;i++){ M.stepKart(k,IN,r.track,DT,1,r); M.stepKart(k2,TH,r2.track,DT,1,r2); }
+  ok(k2.speed>k.speed*1.2,'tilt accel '+k2.speed.toFixed(0)+' vs '+k.speed.toFixed(0));
+  k.speed=220;
+  for(let i=0;i<30;i++) M.stepKart(k,{steer:0,brake:false,drift:false,item:false,throttle:-1},r.track,DT,1,r);
+  ok(k.speed<120,'tilt brake='+k.speed.toFixed(0));
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
