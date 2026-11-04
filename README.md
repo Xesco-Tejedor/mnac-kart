@@ -41,6 +41,10 @@ Obre l'enllaç amb Chrome (escriptori o Android). En mòbil, juga en panoràmic.
 
 **Mòbil (tàctil):** ◀ ▶ per girar · DERRAP (mantén en corba i deixa anar per al turbo) · OBJETE · FRE
 
+**Pantalla completa:** el botó ⛶ de la cantonada juga a la capa superior del
+navegador en qualsevol dispositiu; en mòbil el joc ja hi entra sol en començar
+la cursa. Els avisos del sistema o del propi navegador no els pot tapar cap pàgina.
+
 **Teclat:** ← → girar · ↓/S frenar · Espai/Maj derrapar · X/Intro objecte · Esc/P pausa
 
 **Orientació:** el joc aguanta la pantalla en panoràmic durant la cursa, encara que
@@ -55,6 +59,19 @@ Ales de Serafí (turbo) · Escut del Capitell (protecció)
 
 Les monedes romàniques (màx. 10) pugen la velocitat punta. Les fletxes ambre són turbos.
 
+## Ratpenat de rescat
+
+Si un kart surt de la pista i s'hi queda parat, el ratpenat del museu hi baixa
+batent les ales a tota velocitat, l'agafa amb les urpes i el torna volant fins
+al punt més proper de la línia de cursa, on el deixa anar a punt per seguir.
+El kart que només talla una corba per l'herba a tota velocitat no el molesta.
+
+## Contradirecció
+
+Si condueixes una estona contra el sentit de la cursa, una fletxa ambre de
+mitja volta parpelleja al centre de la pantalla amb l'avís «CONTRADIRECCIÓ»;
+desapareix tan bon punt recuperes la direcció bona.
+
 ## Contacte sòlid
 
 Els karts no es travessen: ni entre ells ni amb les parets. Si mantens premut
@@ -65,4 +82,4 @@ reboten, però mai hi quedes encastat ni la travesses a poc a poc.
 
 `index.html` + `styles.css` + `game.js` (sense dependències ni build).
 Render Mode 7 per línies d'escaneig sobre `<canvas>`, so WebAudio generatiu.
-`tests.html` executa la bateria automàtica de mecàniques (59 proves).
+`tests.html` executa la bateria automàtica de mecàniques (67 proves).
