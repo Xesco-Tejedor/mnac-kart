@@ -19,7 +19,9 @@ const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
 const pick=a=>a[(rnd()*a.length)|0];
 
 /* ------------------------------ audio --------------------------------- */
-/* Tiny chiptune engine: 2 pulse channels + triangle bass + noise hat.   */
+/* Chiptune engine, 80s arcade style (reference: Black Tiger): pulse lead  */
+/* with echo, fast arpeggio channel, octave-pumping bass, kick+hat drums, */
+/* and a speed-driven engine drone. All notes and sounds are original.    */
 const Audio8 = {
   ctx:null, master:null, musicGain:null, sfxGain:null,
   enabled:true, started:false,
@@ -71,14 +73,14 @@ const Audio8 = {
     switch(name){
       case 'coin':    this.tone(1319,.07,'square',.4); this.tone(1760,.16,'square',.4,null,.07); break;
       case 'item':    this.tone(660,.06,'square',.4); this.tone(880,.06,'square',.4,null,.06); this.tone(1320,.12,'square',.4,null,.12); break;
-      case 'hit':     this.noise(.22,.5,700); this.tone(220,.2,'sawtooth',.35,70); break;
+      case 'hit':     this.noise(.22,.5,700); this.tone(300,.24,'sawtooth',.4,60); break;
       case 'spin':    this.tone(500,.3,'square',.3,150); this.noise(.2,.25,1500,.05); break;
       case 'boost':   this.noise(.35,.4,500); this.tone(180,.35,'sawtooth',.3,720); break;
       case 'drift':   this.noise(.09,.16,2600); break;
       case 'hop':     this.tone(340,.1,'square',.35,540); break;
       case 'select':  this.tone(880,.06,'square',.4); this.tone(1175,.09,'square',.4,null,.06); break;
       case 'back':    this.tone(520,.08,'square',.35); break;
-      case 'count':   this.tone(660,.16,'square',.5); break;
+      case 'count':   this.tone(660,.16,'square',.5); this.tone(330,.16,'square',.2); break;
       case 'go':      this.tone(1320,.4,'square',.55); this.noise(.25,.3,2000); break;
       case 'lap':     this.tone(988,.1,'square',.45); this.tone(1319,.14,'square',.45,null,.1); break;
       case 'finish':  [523,659,784,1047].forEach((f,i)=>this.tone(f,.16,'square',.5,null,i*.12)); break;
@@ -86,7 +88,7 @@ const Audio8 = {
       case 'shield':  this.tone(1470,.14,'triangle',.5); break;
       case 'throw':   this.tone(760,.12,'sawtooth',.3,1400); break;
       case 'record':  [1047,1319,1568,2093].forEach((f,i)=>this.tone(f,.12,'square',.45,null,i*.09)); break;
-      case 'bump':    this.noise(.08,.3,500); break;
+      case 'bump':    this.noise(.1,.35,500); this.tone(140,.1,'sawtooth',.3,60); break;
       case 'offroad': this.noise(.06,.1,300); break;
     }
   },
@@ -99,9 +101,10 @@ const Audio8 = {
     this.song=song; this.songPos=0; this.nextNoteTime=this.ctx.currentTime+0.06;
     this.timer=setInterval(()=>this.pump(),40);
   },
-  stopSong(){ if(this.timer){clearInterval(this.timer);this.timer=null;} this.song=null; },
+  stopSong(){ if(this.timer){clearInterval(this.timer);this.timer=null;} this.song=null; this.engineOff(); },
   pump(){
     if(!this.song||!this.enabled) return;
+    this.engineWatch();
     const ahead=0.18;
     while(this.nextNoteTime<this.ctx.currentTime+ahead){
       const s=this.song, i=this.songPos;
@@ -109,11 +112,66 @@ const Audio8 = {
       const beat=60/s.tempo/2; /* 8th notes */
       const L=s.lead[li], B=s.bass[bi];
       const dt=this.nextNoteTime-this.ctx.currentTime;
-      if(L&&L[0]>0) this.mnote(this.midi(L[0]),L[1]*beat,'square',.16,dt);
-      if(B&&B[0]>0) this.mnote(this.midi(B[0]),B[1]*beat,'triangle',.3,dt);
-      if(i%2===1) this.noiseAt(.03,.07,6000,this.nextNoteTime);
-      this.songPos++; this.nextNoteTime+=beat*(L?L[1]:1);
+      const ld=L?L[1]*beat:beat;
+      if(L&&L[0]>0){
+        this.mnote(this.midi(L[0]),L[1]*beat,'square',.15,dt);
+        this.mnote(this.midi(L[0]),L[1]*beat*.8,'square',.05,dt+beat*.75); /* echo */
+      }
+      if(B&&B[0]>0){
+        const n=B[0], steps=Math.max(1,Math.round(B[1]));
+        /* driving 8th-note bass, octave pumping */
+        for(let j=0;j<steps;j++){
+          const o=(j%2===1)?12:0;
+          this.mnote(this.midi(n+o),beat*.9,'triangle',.3,dt+j*beat);
+          if(j%2===0) this.mnote(this.midi(n+7+12),beat*.35,'square',.035,dt+j*beat);
+        }
+        /* fast arpeggio fill: root, 5th, octave, 5th in 16ths */
+        const arp=[n+12,n+19,n+24,n+19];
+        const sub=beat/2;
+        for(let j=0;j<steps*2;j++){
+          this.mnote(this.midi(arp[j%4]),sub*.85,'square',.045,dt+j*sub);
+        }
+      }
+      /* drums: kick on beat, hat on off-beat */
+      const t0=this.nextNoteTime;
+      if(i%4===0) this.kick(t0);
+      if(i%2===1) this.noiseAt(.03,.07,6000,t0);
+      this.songPos++; this.nextNoteTime+=ld;
     }
+  },
+  kick(t){
+    const o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(45,t+.09);
+    g.gain.setValueAtTime(.35,t); g.gain.exponentialRampToValueAtTime(.001,t+.12);
+    o.connect(g); g.connect(this.musicGain); o.start(t); o.stop(t+.14);
+  },
+  /* ---- engine drone: v = 0..1 of top speed; fades if not refreshed ---- */
+  engine(v){
+    if(!this.ctx||!this.enabled) return;
+    v=Math.max(0,Math.min(1,v||0));
+    if(!this.eng){
+      const o=this.ctx.createOscillator(), o2=this.ctx.createOscillator(), g=this.ctx.createGain();
+      o.type='sawtooth'; o2.type='square';
+      const f=this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=600;
+      g.gain.value=0;
+      o.connect(f); o2.connect(f); f.connect(g); g.connect(this.sfxGain);
+      o.start(); o2.start();
+      this.eng={o,o2,g,f};
+    }
+    const t=this.ctx.currentTime, e=this.eng;
+    const fr=55+v*110;
+    e.o.frequency.setTargetAtTime(fr,t,.05);
+    e.o2.frequency.setTargetAtTime(fr*1.5,t,.05);
+    e.f.frequency.setTargetAtTime(300+v*900,t,.05);
+    e.g.gain.setTargetAtTime(.025+v*.05,t,.06); /* quiet: sits under music and sfx */
+    this.engT=performance.now();
+  },
+  engineWatch(){ if(this.eng&&performance.now()-this.engT>250) this.engineOff(); },
+  engineOff(){
+    if(!this.eng) return;
+    const e=this.eng; this.eng=null;
+    try{ const t=this.ctx.currentTime; e.g.gain.setTargetAtTime(0,t,.04);
+      e.o.stop(t+.3); e.o2.stop(t+.3); }catch(_){}
   },
   mnote(f,dur,type,vol,dt){
     const t=this.ctx.currentTime+Math.max(0,dt);
@@ -970,6 +1028,7 @@ function stepRace(race,dt,playerInput){
       cc*= k.aiPace*(diff>8?1.09:(diff<-8?0.93:1));
     }
     stepKart(k,inp,race.track,dt,cc,race);
+    if(k.isPlayer&&!k.finished) Audio8.engine(Math.abs(k.speed)/Math.max(1,maxSpeed(k,race.ccMult)));
   }
   kartContacts(race);
   stepWorldItems(race,dt);
