@@ -337,6 +337,8 @@ function driveCut(r,k,lookahead,maxFrames){
 }
 T('lap: corner-cutting racing line completes a lap',()=>{
   const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  /* lap-counter test: park rivals clear of the line, solid karts block it now */
+  r.karts.filter(x=>x!==k).forEach(x=>{x.x=3*M.TILE;x.y=2.5*M.TILE;});
   driveCut(r,k,380,60*240);
   ok(k.lap>=2,'counter frozen: lap='+k.lap+' wpIndex='+k.wpIndex);
 });
@@ -544,6 +546,62 @@ T('orientation: lock request and release never throw without support',()=>{
   M.orientRequestLock();
   M.orientRelease();
   ok(true,'no exception');
+});
+/* --- contact regression: karts and walls stay solid under pressure --- */
+T('contact: player cannot drive through a rival',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  const o=r.karts.find(x=>!x.isPlayer);
+  /* long straight on track 0, rival parked ahead */
+  o.x=(15+0.5)*M.TILE; o.y=(25+0.5)*M.TILE; o.angle=0; o.dirAngle=0; o.speed=0;
+  r.karts.filter(x=>x!==k&&x!==o).forEach(x=>{x.x=3*M.TILE;x.y=2.5*M.TILE;});
+  k.x=o.x-4*M.TILE; k.y=o.y; k.angle=0; k.dirAngle=0; k.speed=0;
+  const minD=M.KART_R*2-2;
+  for(let i=0;i<300;i++){
+    M.stepKart(k,{steer:0,brake:false,drift:false,item:false},r.track,DT,1,r);
+    M.kartContacts(r);
+    const d=Math.hypot(k.x-o.x,k.y-o.y);
+    ok(d>=minD,'overlap at step '+i+': d='+d.toFixed(1));
+    ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R*0.98),'player in wall at '+i);
+    ok(!M.circleHitsWall(r.track,o.x,o.y,M.WALL_R*0.98),'rival in wall at '+i);
+  }
+});
+T('contact: rival pinned at a wall is never pierced or walled in',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  const o=r.karts.find(x=>!x.isPlayer);
+  const tr=r.track; let spot=null;
+  for(let j=1;j<tr.h-1&&!spot;j++)for(let i=1;i<tr.w-1;i++){
+    if(tr.tiles[j][i]!==M.T_ROAD)continue;
+    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    for(const d of dirs) if(tr.tiles[j+d[1]][i+d[0]]===M.T_WALL){spot={i,j,dx:d[0],dy:d[1]};break;}
+    if(spot)break;
+  }
+  ok(spot,'no wall-adjacent road tile');
+  r.karts.filter(x=>x!==k&&x!==o).forEach(x=>{x.x=3*M.TILE;x.y=2.5*M.TILE;});
+  /* rival against the wall face, player pressed against its open side */
+  o.x=(spot.i+0.5)*M.TILE+spot.dx*(M.TILE/2-M.WALL_R); o.y=(spot.j+0.5)*M.TILE+spot.dy*(M.TILE/2-M.WALL_R);
+  o.angle=Math.atan2(spot.dy,spot.dx); o.dirAngle=o.angle; o.speed=0;
+  k.x=o.x-spot.dx*(M.KART_R*2); k.y=o.y-spot.dy*(M.KART_R*2);
+  k.angle=o.angle; k.dirAngle=o.angle; k.speed=200;
+  const minD=M.KART_R*2*0.75;
+  for(let i=0;i<240;i++){
+    M.stepKart(k,{steer:0,brake:false,drift:false,item:false},tr,DT,1,r);
+    M.kartContacts(r);
+    const d=Math.hypot(k.x-o.x,k.y-o.y);
+    ok(d>=minD,'pierced at step '+i+': d='+d.toFixed(1));
+    ok(!M.circleHitsWall(tr,o.x,o.y,M.WALL_R*0.98),'pinned rival in wall at '+i);
+    ok(!M.circleHitsWall(tr,k.x,k.y,M.WALL_R*0.98),'player in wall at '+i);
+  }
+});
+T('contact: pressing into a wall all race never enters it',()=>{
+  const r=mkRace(0,0); const k=r.karts.find(x=>x.isPlayer);
+  r.karts.filter(x=>x!==k).forEach(x=>{x.x=3*M.TILE;x.y=2.5*M.TILE;});
+  /* face west into the wall near (6,8) on track 0 and hold full throttle */
+  k.x=6.5*M.TILE; k.y=8.5*M.TILE; k.angle=Math.PI; k.dirAngle=Math.PI; k.speed=0;
+  for(let i=0;i<600;i++){
+    M.stepKart(k,{steer:0,brake:false,drift:false,item:false},r.track,DT,1,r);
+    M.kartContacts(r);
+    ok(!M.circleHitsWall(r.track,k.x,k.y,M.WALL_R*0.98),'in wall at step '+i+' x='+k.x.toFixed(1));
+  }
 });
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
