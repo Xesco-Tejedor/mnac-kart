@@ -452,13 +452,34 @@ T('viewport: canvas fits visible area at 16:9',()=>{
 T('viewport: refit shrinks when visible height shrinks',()=>{
   const cv=document.getElementById('game');
   const realVV=window.visualViewport;
-  const fake={width:800,height:300,addEventListener(){}};
+  const fake={width:800,height:300,offsetLeft:0,offsetTop:0,addEventListener(){}};
   try{
     Object.defineProperty(window,'visualViewport',{value:fake,configurable:true});
     M.fitCanvas();
     const w=parseFloat(cv.style.width),h=parseFloat(cv.style.height);
     ok(h<=300,'still cropped h='+h);
     ok(Math.abs(w/h-16/9)<0.02,'ratio '+(w/h));
+  }finally{
+    Object.defineProperty(window,'visualViewport',{value:realVV,configurable:true});
+    M.fitCanvas();
+  }
+});
+T('viewport: UI layers and corner buttons track the visible rect',()=>{
+  const realVV=window.visualViewport;
+  const fake={width:800,height:300,offsetLeft:20,offsetTop:40,addEventListener(){}};
+  try{
+    Object.defineProperty(window,'visualViewport',{value:fake,configurable:true});
+    M.fitCanvas();
+    ['frame','touchUI','uiLayer','rotateHint'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(!el)return; /* tests.html has no #frame */
+      ok(el.style.top==='40px'&&el.style.left==='20px',id+' offset '+el.style.left+','+el.style.top);
+      ok(el.style.width==='800px'&&el.style.height==='300px',id+' size '+el.style.width+'x'+el.style.height);
+    });
+    const bs=document.getElementById('btnSound'),bg=document.getElementById('btnGuide');
+    ok(bs.style.top==='50px'&&bs.style.left==='30px','btnSound '+bs.style.left+','+bs.style.top);
+    ok(bg.style.top==='50px','btnGuide top '+bg.style.top);
+    ok(parseFloat(bg.style.left)+bg.offsetWidth<=820,'btnGuide overflows '+bg.style.left);
   }finally{
     Object.defineProperty(window,'visualViewport',{value:realVV,configurable:true});
     M.fitCanvas();
