@@ -90,6 +90,7 @@ const Audio8 = {
       case 'record':  [1047,1319,1568,2093].forEach((f,i)=>this.tone(f,.12,'square',.45,null,i*.09)); break;
       case 'bump':    this.noise(.1,.35,500); this.tone(140,.1,'sawtooth',.3,60); break;
       case 'offroad': this.noise(.06,.1,300); break;
+      case 'bat':     this.noise(.05,.22,900); this.noise(.05,.22,1100,.07); this.noise(.06,.22,800,.14); this.tone(1750,.14,'square',.22,1200,.02); break;
     }
   },
   /* ---- music ---- */
@@ -643,6 +644,7 @@ function makeKart(drv,isPlayer){
     finished:false,finishTime:0,
     lapStart:0,bestLap:0,lastLap:0,
     offroad:false,itemCd:0,
+    rescue:null,offRef:null,liftAlt:0,wrongT:0,wrongWay:false,
     aiPace:0.92+rnd()*0.1, aiItemT:0,
     wheelSpin:0
   };
@@ -843,6 +845,7 @@ function kartContacts(race){
     for(let i=0;i<ks.length;i++)for(let j=i+1;j<ks.length;j++){
       const a=ks[i],b=ks[j];
       if(a.spinT>0&&b.spinT>0)continue;
+      if(a.rescue||b.rescue)continue;
       const d2=dist2(a.x,a.y,b.x,b.y),rr=KART_R*2;
       if(d2<rr*rr&&d2>0.01){
         const d=Math.sqrt(d2),nx=(b.x-a.x)/d,ny=(b.y-a.y)/d,ov=(rr-d)/2;
@@ -879,6 +882,59 @@ function kartContacts(race){
   }
 }
 
+/* --------------------------- rescue bat ------------------------------- */
+/* Ratpenat de rescat: when a kart leaves the road and stays there nearly
+   stopped, the museum bat swoops down flapping its wings fast, grabs the
+   kart and carries it back to the nearest point of the racing line. A kart
+   only cutting across the grass at speed is left alone. */
+const RESCUE={stillSpeed:32,stillTime:0.9,inT:0.7,carryAlt:30,batHigh:250,dropT:0.6,carrySpeed:540};
+const easeIO=t=>t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function rescueTarget(tr,k){
+  const wps=tr.wps; let best=0,bd=Infinity;
+  for(let i=0;i<wps.length;i++){
+    const d=dist2(k.x,k.y,wps[i].x,wps[i].y);
+    if(d<bd){bd=d;best=i;}
+  }
+  const wp=wps[best],nx=wps[(best+1)%wps.length];
+  return {x:wp.x,y:wp.y,angle:Math.atan2(nx.y-wp.y,nx.x-wp.x),next:(best+1)%wps.length};
+}
+function startRescue(race,k){
+  const tgt=rescueTarget(race.track,k);
+  k.rescue={phase:'in',t:0,batAlt:RESCUE.batHigh,
+    sx:k.x,sy:k.y,tx:tgt.x,ty:tgt.y,tangle:tgt.angle,wpNext:tgt.next};
+  k.speed=0;k.spinT=0;k.hopT=0;
+  k.drift.active=false;k.drift.charge=0;k.drift.level=0;
+  k.liftAlt=0;
+  if(k.isPlayer){Audio8.sfx('bat');Audio8.engine(0);}
+}
+function stepRescue(race,k,dt){
+  const r=k.rescue; r.t+=dt;
+  if(r.phase==='in'){
+    /* the bat dives from high above to just over the kart */
+    r.batAlt=lerp(RESCUE.batHigh,RESCUE.carryAlt,easeIO(Math.min(1,r.t/RESCUE.inT)));
+    if(r.t>=RESCUE.inT){
+      r.phase='carry';r.t=0;
+      r.carryT=clamp(Math.hypot(r.tx-k.x,r.ty-k.y)/RESCUE.carrySpeed,0.9,2.4);
+    }
+  }else if(r.phase==='carry'){
+    const p=Math.min(1,r.t/r.carryT),e=easeIO(p);
+    k.x=lerp(r.sx,r.tx,e); k.y=lerp(r.sy,r.ty,e);
+    k.liftAlt=RESCUE.carryAlt*0.8*Math.min(1,p*2.5);
+    r.batAlt=RESCUE.carryAlt+Math.sin(r.t*9)*2;
+    k.angle+=wrapAngle(r.tangle-k.angle)*Math.min(1,4*dt);
+    k.dirAngle=k.angle;
+    if(p>=1){
+      r.phase='drop';r.t=0;
+      k.x=r.tx;k.y=r.ty;k.angle=r.tangle;k.dirAngle=r.tangle;k.wpIndex=r.wpNext;
+    }
+  }else{ /* drop: land the kart facing along the track; the bat flies away */
+    const p=easeIO(Math.min(1,r.t/RESCUE.dropT));
+    k.liftAlt=RESCUE.carryAlt*0.8*(1-p);
+    r.batAlt=lerp(RESCUE.carryAlt,RESCUE.batHigh,p);
+    if(r.t>=RESCUE.dropT){k.rescue=null;k.liftAlt=0;k.speed=0;k.offRef=null;}
+  }
+}
+
 /* ------------------------- items in the world ------------------------- */
 function useItem(k,tr,race){
   const it=k.item; k.item=null;
@@ -908,7 +964,7 @@ function stepWorldItems(race,dt){
   for(const s of race.slicks){
     s.life-=dt;
     for(const k of race.karts){
-      if(k.spinT>0)continue;
+      if(k.spinT>0||k.rescue)continue;
       if(dist2(k.x,k.y,s.x,s.y)<(KART_R+9)*(KART_R+9)){ hitKart(k,false); s.life=0; }
     }
   }
@@ -923,13 +979,14 @@ function stepWorldItems(race,dt){
     p.y+=Math.sin(p.angle)*p.speed*dt;
     if(tileAt(tr,p.x,p.y)===T_WALL){p.life=0;continue;}
     for(const k of race.karts){
-      if(k===p.owner)continue;
+      if(k===p.owner||k.rescue)continue;
       if(dist2(k.x,k.y,p.x,p.y)<(KART_R+8)*(KART_R+8)){ hitKart(k,true); p.life=0; break; }
     }
   }
   race.shots=race.shots.filter(p=>p.life>0);
   /* coins */
   for(const k of race.karts){
+    if(k.rescue)continue;
     const t=kartTile(tr,k);
     if(t===T_COIN){
       const key=((k.x/TILE)|0)+','+((k.y/TILE)|0);
@@ -1020,6 +1077,8 @@ function stepRace(race,dt,playerInput){
     return;
   }
   for(const k of race.karts){
+    /* a kart being carried by the rescue bat skips normal driving */
+    if(k.rescue){stepRescue(race,k,dt);continue;}
     const inp=k.isPlayer?playerInput:aiInput(k,race);
     /* rubber banding: mild pace correction vs player */
     let cc=race.ccMult;
@@ -1028,6 +1087,22 @@ function stepRace(race,dt,playerInput){
       cc*= k.aiPace*(diff>8?1.09:(diff<-8?0.93:1));
     }
     stepKart(k,inp,race.track,dt,cc,race);
+    /* rescue bat: appears only when the kart is stuck off the road, i.e. it
+       stays within a small patch of grass instead of getting anywhere */
+    if(!k.finished&&!k.rescue){
+      if(k.offroad){
+        if(!k.offRef||dist2(k.x,k.y,k.offRef.x,k.offRef.y)>70*70)k.offRef={x:k.x,y:k.y,t:0};
+        k.offRef.t+=dt;
+        if(k.offRef.t>=RESCUE.stillTime)startRescue(race,k);
+      }else k.offRef=null;
+      /* wrong way: heading against the racing line at speed, sustained */
+      const wps=race.track.wps,N=wps.length;
+      const wp=wps[k.wpIndex],pv=wps[(k.wpIndex-1+N)%N];
+      const ta=Math.atan2(wp.y-pv.y,wp.x-pv.x);
+      const err=Math.abs(wrapAngle(ta-k.dirAngle));
+      if(err>1.75&&k.speed>45)k.wrongT+=dt;else k.wrongT=0;
+      k.wrongWay=k.wrongT>1.2;
+    }else{k.wrongT=0;k.wrongWay=false;}
     if(k.isPlayer&&!k.finished) Audio8.engine(Math.abs(k.speed)/Math.max(1,maxSpeed(k,race.ccMult)));
   }
   kartContacts(race);
@@ -1168,6 +1243,11 @@ function drawRace(ctx,race,skies){
   }
   /* player on top */
   if(p)drawKartSprite(ctx,p,cam,true);
+  if(p&&p.rescue){
+    ctx.fillStyle='#ffb000';ctx.font='bold 13px "Courier New",monospace';ctx.textAlign='center';
+    ctx.fillText('Ratpenat al rescat!',VW/2,46);ctx.textAlign='left';
+  }
+  drawWrongWay(ctx,race);
   MNACArt.postFx(ctx,tr.def,performance.now()/1000,p?Math.min(1,Math.abs(p.speed||0)/400):0.5);
 }
 function wp1x(tr){return tr.wps[0].x;}
@@ -1179,6 +1259,38 @@ function coinEntities(race){
       if(tr.tiles[j][i]===T_COIN) race._coins.push({key:i+','+j,x:(i+0.5)*TILE,y:(j+0.5)*TILE});
   }
   return race._coins.filter(c=>!race.coinsTaken.has(c.key));
+}
+
+/* flashing U-turn arrow while the player drives against the racing line */
+function drawWrongWay(ctx,race){
+  const p=race.player;
+  if(!p||!p.wrongWay||p.rescue)return;
+  if((race.time*2.6)%1>0.62)return; /* fast blink */
+  const cx=VW/2,cy=VH/2-58,R=15;
+  ctx.save();
+  ctx.translate(cx,cy);
+  /* dark outline first so the amber reads over the golden halls */
+  const a0=Math.PI/4,a1=3*Math.PI/4;
+  ctx.lineCap='round';
+  ctx.strokeStyle='rgba(30,16,4,.9)';ctx.lineWidth=11;
+  ctx.beginPath();ctx.arc(0,0,R,a0,a1,true);ctx.stroke();
+  ctx.strokeStyle='#ffb000';ctx.lineWidth=6;
+  ctx.shadowColor='rgba(255,176,0,.9)';ctx.shadowBlur=8;
+  /* horseshoe from the right tail up over the top down to the left */
+  ctx.beginPath();ctx.arc(0,0,R,a0,a1,true);ctx.stroke();
+  /* arrowhead pointing down at the left end */
+  const ax=-R*Math.SQRT1_2,ay=R*Math.SQRT1_2;
+  ctx.fillStyle='rgba(30,16,4,.9)';
+  ctx.beginPath();ctx.moveTo(ax-11,ay-6);ctx.lineTo(ax+11,ay-6);ctx.lineTo(ax,ay+15);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#ffb000';
+  ctx.beginPath();ctx.moveTo(ax-8,ay-5);ctx.lineTo(ax+8,ay-5);ctx.lineTo(ax,ay+12);ctx.closePath();ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.font='bold 11px "Courier New",monospace';ctx.textAlign='center';
+  ctx.lineWidth=3;ctx.strokeStyle='rgba(30,16,4,.9)';
+  ctx.strokeText('CONTRADIRECCIÓ',0,ay+28);
+  ctx.fillStyle='#ffb000';
+  ctx.fillText('CONTRADIRECCIÓ',0,ay+28);
+  ctx.restore();
 }
 
 /* -------------------------------- HUD --------------------------------- */
@@ -1583,8 +1695,9 @@ function drawKartSprite(ctx,k,cam,isPlayer){
   }
   ctx.fillStyle='rgba(0,0,0,.4)';
   ctx.beginPath();ctx.ellipse(px,py-h*0.05,w*0.52,Math.max(2,h*0.14),0,0,TAU);ctx.fill();
+  const liftF=(k.liftAlt||0)/RESCUE.carryAlt;
   ctx.save();
-  ctx.translate(px,py-h*0.5-(k.hopT>0?h*0.12:0));
+  ctx.translate(px,py-h*0.5-(k.hopT>0?h*0.12:0)-liftF*h*0.5);
   ctx.rotate(wrapAngle(k.angle-cam.angle)+(k.drift.active?k.drift.dir*0.18:0));
   if(k.spinT>0)ctx.rotate(k.spinT*10);
   ctx.imageSmoothingEnabled=true;
@@ -1594,6 +1707,20 @@ function drawKartSprite(ctx,k,cam,isPlayer){
     ctx.beginPath();ctx.arc(0,0,w*0.62,0,TAU);ctx.stroke();
   }
   ctx.restore();
+  /* rescue bat overhead: wings flapping fast, rope to the kart it carries */
+  if(k.rescue){
+    const rs=k.rescue,frames=MNACArt.rescueBatFrames();
+    const fr=frames[(rs.t*13|0)%frames.length];
+    const bw=w*1.15,bh=bw*fr.height/fr.width;
+    const batY=py-(rs.batAlt/RESCUE.carryAlt)*h*0.5-bh;
+    const kartTop=py-h*0.5-liftF*h*0.5-h*0.45;
+    if(rs.phase!=='in'&&rs.batAlt<RESCUE.batHigh*0.6){
+      ctx.strokeStyle='rgba(24,14,8,.85)';ctx.lineWidth=Math.max(1,w*0.025);
+      ctx.beginPath();ctx.moveTo(px,batY+bh*0.92);ctx.lineTo(px,kartTop);ctx.stroke();
+    }
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(fr,px-bw/2,batY,bw,bh);
+  }
 }
 function drawDeco(ctx,cam,wx,wy,kind){
   const pr=project(cam,wx,wy);
@@ -1821,11 +1948,13 @@ function setupTouch(){
   if(bt)bt.addEventListener('pointerdown',e=>{
     e.preventDefault();Audio8.resume();
     Tilt.enabled=!Tilt.enabled;
-    if(Tilt.enabled)tiltRecalibrate();
+    if(Tilt.enabled){tiltRecalibrate();tiltRequestPermission();}
     if(!Tilt.enabled){Tilt.active=false;Tilt.steer=0;Tilt.pedal=0;}
     updateTiltBtn();
   });
-  document.addEventListener('pointerdown',tiltRequestPermission,{once:true});
+  /* Motion permission is requested only from the GIRO button above, never
+     from an unrelated first tap: a system dialog must not pop over the game
+     while someone is just driving. */
   const bi=document.getElementById('btnItem');
   bi.addEventListener('pointerdown',e=>{e.preventDefault();Audio8.resume();Input.item=true;bi.classList.add('active');});
   const biOff=e=>{e.preventDefault();bi.classList.remove('active');};
@@ -2007,6 +2136,7 @@ window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,touch,
   buildTrack,builtTrack,makeRace,stepRace,stepKart,aiInput,kartContacts,
   circleHitsWall,pushOutOfWalls,WALL_R,KART_R,hitsKart,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
+  startRescue,stepRescue,rescueTarget,RESCUE,drawWrongWay,
   startRace,startGP,showTitle,showCC,showChars,showTracks,showGuide,TILE,
   drawRace,drawHUD,renderWorld,
   fitCanvas,updateRotateHint,Orient,orientRot,orientRequestLock,orientRelease,tiltEffectiveAngle,screenAngleDeg,
