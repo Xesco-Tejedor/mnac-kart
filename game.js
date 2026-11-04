@@ -1748,6 +1748,20 @@ function updateRotateHint(){
 /* ------------------------------- loop --------------------------------- */
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
+/* Fit the 16:9 canvas inside the actually visible viewport. CSS vh units
+   count space hidden under mobile browser chrome (URL bar / toolbars), which
+   cropped the game in landscape; visualViewport reports the visible area. */
+function fitCanvas(){
+  const vv=window.visualViewport;
+  const vw=vv?vv.width:window.innerWidth, vh=vv?vv.height:window.innerHeight;
+  const s=Math.min(vw/16,vh/9);
+  canvas.style.width=Math.max(1,Math.floor(s*16))+'px';
+  canvas.style.height=Math.max(1,Math.floor(s*9))+'px';
+}
+window.addEventListener('resize',fitCanvas);
+window.addEventListener('orientationchange',fitCanvas);
+if(window.visualViewport)window.visualViewport.addEventListener('resize',fitCanvas);
+fitCanvas();
 ctx.imageSmoothingEnabled=false;
 let last=0,acc=0,fpsAvg=16;
 const DT=1/60;
@@ -1810,5 +1824,6 @@ window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,touch,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
   startRace,startGP,showTitle,showCC,showChars,showTracks,showGuide,TILE,
   drawRace,drawHUD,renderWorld,
+  fitCanvas,
   T_OFFROAD,T_ROAD,T_WALL,T_BOOST,T_ITEM,T_START,T_COIN};
 })();
