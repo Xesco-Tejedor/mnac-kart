@@ -1266,9 +1266,9 @@ function drawWrongWay(ctx,race){
   const p=race.player;
   if(!p||!p.wrongWay||p.rescue)return;
   if((race.time*2.6)%1>0.62)return; /* fast blink */
-  const cx=VW/2,cy=120,R=15;
+  const cx=VW/2,cy=126,R=15;
   ctx.save();
-  ctx.translate(cx,cy);ctx.scale(.85,.85); /* above the player kart, clear of the minimap */
+  ctx.translate(cx,cy);ctx.scale(.8,.8); /* above the player kart, clear of the minimap */
   /* dark outline first so the amber reads over the golden halls */
   const a0=Math.PI/4,a1=3*Math.PI/4;
   ctx.lineCap='round';
