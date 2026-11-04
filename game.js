@@ -1266,9 +1266,9 @@ function drawWrongWay(ctx,race){
   const p=race.player;
   if(!p||!p.wrongWay||p.rescue)return;
   if((race.time*2.6)%1>0.62)return; /* fast blink */
-  const cx=VW/2,cy=VH/2-58,R=15;
+  const cx=VW/2,cy=120,R=15;
   ctx.save();
-  ctx.translate(cx,cy);
+  ctx.translate(cx,cy);ctx.scale(.85,.85); /* above the player kart, clear of the minimap */
   /* dark outline first so the amber reads over the golden halls */
   const a0=Math.PI/4,a1=3*Math.PI/4;
   ctx.lineCap='round';
@@ -1554,7 +1554,6 @@ function showGuide(){
     '<li><span class="kbd">◀</span><span class="kbd">▶</span> gira el kart</li>'+
     '<li><span class="kbd">GIRO</span> inclina el mòbil com un volant per girar; es suma als botons ◀ ▶ i en reforça la força. Es calibra sol a l’inici de cada cursa. Toca’l per activar-lo o desactivar-lo</li>'+
     '<li>Amb el GIRO actiu, inclina la pantalla cap endavant (la vora superior s’allunya de tu) per accelerar més, i cap a tu per frenar</li>'+
-    '<li><span class="kbd">DERRAP</span> mantén premut en una corba per derrapar i carrega el turbo; deixa anar per disparar-lo</li>'+
     '<li><span class="kbd">OBJETE</span> utilitza l’objecte que portis</li>'+
     '<li><span class="kbd">FRE</span> frena</li></ul>'+
     '<h3>Controls (teclat)</h3><ul>'+
@@ -1805,7 +1804,7 @@ function refreshSteer(){
 }
 const touch={left:false,right:false,drift:false,brake:false,gas:false};
 function bindHold(id,prop){
-  const b=document.getElementById(id);
+  const b=document.getElementById(id);if(!b)return;
   const on=e=>{e.preventDefault();Audio8.resume();touch[prop]=true;b.classList.add('active');};
   const off=e=>{e.preventDefault();touch[prop]=false;b.classList.remove('active');};
   b.addEventListener('pointerdown',on);
