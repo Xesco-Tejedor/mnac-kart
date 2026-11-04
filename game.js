@@ -1955,6 +1955,12 @@ function setupTouch(){
   /* Motion permission is requested only from the GIRO button above, never
      from an unrelated first tap: a system dialog must not pop over the game
      while someone is just driving. */
+  const bful=document.getElementById('btnFull');
+  if(bful){
+    bful.onclick=()=>{Audio8.resume();toggleFull();};
+    document.addEventListener('fullscreenchange',updateFullBtn);
+    updateFullBtn();
+  }
   const bi=document.getElementById('btnItem');
   bi.addEventListener('pointerdown',e=>{e.preventDefault();Audio8.resume();Input.item=true;bi.classList.add('active');});
   const biOff=e=>{e.preventDefault();bi.classList.remove('active');};
@@ -2003,6 +2009,24 @@ function orientRelease(){
   try{if(window.screen&&screen.orientation&&screen.orientation.unlock)screen.orientation.unlock();}catch(e){}
   try{if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});}catch(e){}
   Orient.locked=false;
+}
+/* Fullscreen is the browser's real top layer: the game (canvas, HUD and
+   touch controls, all inside the fullscreen element) plays above anything
+   the page can draw. Notices from the OS or the browser itself can still
+   overlay it; a page can never cover those. */
+function toggleFull(){
+  try{
+    if(document.fullscreenElement){document.exitFullscreen().catch(()=>{});}
+    else if(document.documentElement.requestFullscreen){
+      document.documentElement.requestFullscreen({navigationUI:'hide'}).catch(()=>{});
+    }
+  }catch(e){}
+}
+function updateFullBtn(){
+  const b=document.getElementById('btnFull');if(!b)return;
+  const on=!!document.fullscreenElement;
+  b.textContent=on?'✕':'⛶';
+  b.setAttribute('aria-pressed',on?'true':'false');
 }
 
 /* Fit the 16:9 canvas inside the actually visible viewport. CSS vh units
@@ -2058,6 +2082,12 @@ function fitCanvas(){
   });
   const bs=document.getElementById('btnSound'), bg=document.getElementById('btnGuide');
   if(!bs||!bg)return;
+  const bf=document.getElementById('btnFull');
+  if(bf){
+    bf.style.right='auto';
+    bf.style.left=((rotated?vw:ox+vw0)-bg.offsetWidth-bf.offsetWidth-18)+'px';
+    bf.style.top=(rotated?10:oy+10)+'px';
+  }
   if(rotated){
     bs.style.left='10px'; bs.style.top='10px';
     bg.style.right='auto';
@@ -2136,7 +2166,7 @@ window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,touch,
   buildTrack,builtTrack,makeRace,stepRace,stepKart,aiInput,kartContacts,
   circleHitsWall,pushOutOfWalls,WALL_R,KART_R,hitsKart,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
-  startRescue,stepRescue,rescueTarget,RESCUE,drawWrongWay,
+  startRescue,stepRescue,rescueTarget,RESCUE,drawWrongWay,toggleFull,
   startRace,startGP,showTitle,showCC,showChars,showTracks,showGuide,TILE,
   drawRace,drawHUD,renderWorld,
   fitCanvas,updateRotateHint,Orient,orientRot,orientRequestLock,orientRelease,tiltEffectiveAngle,screenAngleDeg,
