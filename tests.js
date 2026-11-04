@@ -629,6 +629,28 @@ T('gas button: exists, holds and releases throttle',()=>{
   b.dispatchEvent(new Event('pointerup',{cancelable:true}));
   ok(!b.classList.contains('active'),'gas stuck after release');
 });
+T('tilt: leaning past 90deg keeps full throttle (phone almost face-away)',()=>{
+  const flat={alpha:0,beta:0,gamma:0};
+  [60,89,100,120,150,170].forEach(d=>{
+    const p=M.tiltPedalFromLean(M.tiltLeanFromAxes(M.tiltAxes(flat,{alpha:0,beta:0,gamma:d}),90));
+    ok(p>0.99,'gamma '+d+' pedal '+p);
+    const q=M.tiltPedalFromLean(M.tiltLeanFromAxes(M.tiltAxes(flat,{alpha:0,beta:0,gamma:-d}),90));
+    ok(q<-0.99,'gamma -'+d+' pedal '+q);
+    const s=M.tiltSteerFromTwist(M.tiltAxes(flat,{alpha:0,beta:0,gamma:d})[2]);
+    ok(s===0,'lean must not steer at '+d+': '+s);
+  });
+});
+T('orientation: OS flips are undone, tilt axes keep the starting orientation',()=>{
+  ok(M.orientRot(90,90)===0&&M.orientRot(90,270)===180&&M.orientRot(90,0)===90&&M.orientRot(270,0)===270,'rot table');
+  const st=M.Game.state,tm=M.Game.touchMode;
+  try{
+    M.Game.touchMode=true; M.Game.state='race'; M.Orient.locked=false; M.Orient.base=null;
+    M.fitCanvas();
+    const b=M.Orient.base; ok(b!==null,'base not latched');
+    M.Orient.base=(b+90)%360; /* pretend race started at another OS angle */
+    ok(M.tiltEffectiveAngle()===(b+90)%360,'effective angle follows latched start');
+  }finally{ M.Game.state=st; M.Game.touchMode=tm; M.Orient.base=null; M.fitCanvas(); }
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
