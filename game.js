@@ -345,13 +345,19 @@ function stampRow(g,wps,idx,ch,count){
   }
 }
 
+function segDist(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;
+  let t=L2?((px-ax)*dx+(py-ay)*dy)/L2:0; t=clamp(t,0,1);
+  return Math.hypot(px-(ax+dx*t),py-(ay+dy*t));
+}
+
 const TRACKS=[
  { id:'vestibul', name:'Gran Vestíbul', song:'vestibul', laps:3,
    w:40,h:24, roadR:2.6,
    wps:[[8,19.5],[16,19.5],[26,19.5],[33,19.5],[35.5,17],[35.5,12],[35.5,6],[34,3.5],[26,3.5],[14,3.5],[5,3.5],[3.5,7],[3.5,14],[3.5,19.5]],
    itemsAt:[9], boostAt:[4], coinsAt:[2,7,12],
    obstacles:[[14,8],[19,9],[24,8],[15,14],[21,15],[25,13]],
-   decor:[[14,8,'columna'],[19,9,'columna'],[24,8,'columna'],[15,14,'columna'],[21,15,'columna'],[25,13,'columna'],[20,4,'busto'],[4,21,'planta'],[37,21,'planta']],
+   decor:[[14,8,'columna'],[19,9,'columna'],[24,8,'columna'],[15,14,'columna'],[21,15,'columna'],[25,13,'columna'],[20,5,'busto'],[4,21,'planta'],[37,21,'planta']],
    pal:{floorA:'#4a3a26',floorB:'#423321',roadA:'#8a7452',roadB:'#7d684a',wall:'#2e2212',wallTop:'#5a4426',skyT:'#2a1c0c',skyB:'#120b05',line:'#ffb000'} },
  { id:'capitells', name:'Sala dels Capitells', song:'capitells', laps:3,
    w:44,h:30, roadR:2.5,
@@ -365,7 +371,7 @@ const TRACKS=[
    wps:[[8,22],[16,22],[22,18],[22,14],[16,14],[10,14],[6,10],[6,5],[14,4],[24,4],[30,4],[38,5],[40,10],[36,14],[30,14],[26,18],[30,22],[36,24],[24,24],[12,24],[8,22]],
    itemsAt:[12], boostAt:[8], coinsAt:[3,10,17],
    obstacles:[[24,9],[28,9],[16,19],[20,19],[33,19],[10,19]],
-   decor:[[24,9,'fresc'],[28,9,'fresc'],[16,19,'fresc'],[20,19,'vitrina'],[33,19,'fresc'],[10,19,'vitrina'],[34,8,'gargola'],[12,9,'gargola']],
+   decor:[[24,9,'fresc'],[28,9,'fresc'],[16,19,'fresc'],[21,21,'vitrina'],[33,19,'fresc'],[10,19,'vitrina'],[34,8,'gargola'],[12,9,'gargola']],
    pal:{floorA:'#4d3620',floorB:'#46301b',roadA:'#93683c',roadB:'#865d35',wall:'#33200e',wallTop:'#5d3c1a',skyT:'#2e1608',skyB:'#140a04',line:'#ffb000'} },
  { id:'mirador', name:'Terrassa del Mirador', song:'mirador', laps:3,
    w:48,h:26, roadR:3.0,
@@ -414,6 +420,21 @@ function buildTrack(def){
     .filter((p,i,a)=>i===0||Math.hypot(p.x-a[i-1].x,p.y-a[i-1].y)>1)
     .filter((p,i,a)=>i<a.length-1||Math.hypot(p.x-a[0].x,p.y-a[0].y)>1);
   const decor=def.decor.map(d=>[d[0]+PAD,d[1]+PAD,MNACArt.themedKind(d[2],def)]).concat(MNACArt.perimeter(def).map(d=>[d[0]+PAD,d[1]+PAD,d[2],1]));
+  /* scenery is solid: decor pieces may not be driven through. The painted
+     floor art is kept (tiles convert after the map/minimap prerender), and
+     pieces sitting on the racing line itself stay passable so the AI line
+     is never walled off. Perimeter bays already sit on the wall ring. */
+  for(const d of decor){
+    if(d[3])continue;
+    const tx=d[0]|0,ty=d[1]|0;
+    let dl=1/0;
+    for(let i=0;i<wpsO.length;i++){
+      const a=wpsO[i],b=wpsO[(i+1)%wpsO.length];
+      dl=Math.min(dl,segDist(tx+0.5,ty+0.5,a[0],a[1],b[0],b[1]));
+    }
+    if(dl<0.95)continue;
+    tiles[ty][tx]=T_WALL;
+  }
   return {def,tiles,w:W2,h:H2,map:mc,minimap:mm,wps,decor,
           worldW:W2*TILE,worldH:H2*TILE};
 }
@@ -602,11 +623,14 @@ function stepKart(k,input,tr,dt,ccMult,race){
     moveKart(k,tr,dt);
     return;
   }
-  /* acceleration (auto-accel arcade) */
-  const ms=maxSpeed(k,ccMult);
-  const acc=240*st.accel*(k.boostT>0?3:1);
+  /* acceleration (auto-accel arcade; a forward screen lean adds throttle,
+     a lean back toward the player brakes, both analog) */
+  const th=clamp(input.throttle||0,-1,1);
+  const ms=maxSpeed(k,ccMult)*(1+0.12*Math.max(0,th));
+  const acc=240*st.accel*(k.boostT>0?3:1)*(1+0.55*Math.max(0,th));
   if(input.reverse){ k.speed=Math.max(-95,k.speed-320*dt); }
   else if(input.brake){ k.speed=Math.max(0,k.speed-430*dt); }
+  else if(th<0){ k.speed=Math.max(0,k.speed-430*(-th)*dt); }
   else{
     if(k.speed<ms) k.speed=Math.min(ms,k.speed+acc*dt);
     else k.speed=Math.max(ms,k.speed-180*dt);
@@ -1149,6 +1173,12 @@ function drawHUD(ctx,race){
     ctx.fillStyle='rgba(245,231,200,.25)';ctx.fillRect(ix,iy+2,iw,3);
     const mx=VW/2+clamp(Tilt.steer,-1,1)*(iw/2-3);
     ctx.fillStyle='#ffb000';ctx.fillRect(mx-2,iy-1,4,9);
+    const pd=clamp(Tilt.pedal,-1,1);
+    if(pd!==0){ /* right of the bar: up = accelerar, down = frenar */
+      ctx.fillStyle=pd>0?'#7de37d':'#ff5a4a';
+      const bh=Math.max(2,Math.abs(pd)*9);
+      ctx.fillRect(ix+iw+5,pd>0?iy+8-bh:iy+2,4,bh);
+    }
   }
   /* item hint for touch (big, centered above buttons) */
   if(isTouch&&p.item){
@@ -1325,7 +1355,8 @@ function showGuide(){
     'Completa '+3+' voltes abans que els rivals.</p>'+
     '<h3>Controls (mòbil)</h3><ul>'+
     '<li><span class="kbd">◀</span><span class="kbd">▶</span> gira el kart</li>'+
-    '<li><span class="kbd">GIRO</span> inclina el mòbil com un volant per girar; es calibra sol a l’inici de cada cursa. Toca’l per activar-lo o desactivar-lo</li>'+
+    '<li><span class="kbd">GIRO</span> inclina el mòbil com un volant per girar; es suma als botons ◀ ▶ i en reforça la força. Es calibra sol a l’inici de cada cursa. Toca’l per activar-lo o desactivar-lo</li>'+
+    '<li>Amb el GIRO actiu, inclina la pantalla cap endavant (la vora superior s’allunya de tu) per accelerar més, i cap a tu per frenar</li>'+
     '<li><span class="kbd">DERRAP</span> mantén premut en una corba per derrapar i carrega el turbo; deixa anar per disparar-lo</li>'+
     '<li><span class="kbd">OBJETE</span> utilitza l’objecte que portis</li>'+
     '<li><span class="kbd">FRE</span> frena</li></ul>'+
@@ -1341,7 +1372,8 @@ function showGuide(){
     '<h3>Consells</h3><ul>'+
     '<li>Les <b>monedes romàniques</b> (màx. 10) pugen la velocitat punta</li>'+
     '<li>Les fletxes ambre del terra donen turbo</li>'+
-    '<li>Fora de la pista vas més lent: torna al paviment</li></ul>');
+    '<li>Fora de la pista vas més lent: torna al paviment</li>'+
+    '<li>Les obres i elements del museu (columnes, vitrines, plantes…) són sòlids: no els travessis</li></ul>');
   const back=el('button','uiClose','TANCA');back.dataset.nav=1;
   back.onclick=()=>{ if(Game.state==='race'){hideOverlayOnly();} else showTitle(); };
   card.appendChild(back);
@@ -1538,13 +1570,21 @@ function startAttract(){
 }
 
 /* ------------------------------- input -------------------------------- */
-const Input={steer:0,brake:false,drift:false,item:false,_itemHeld:false};
+const Input={steer:0,throttle:0,brake:false,drift:false,item:false,_itemHeld:false};
 const keys={};
+const TILT_STEER_ADD=0.4; /* extra lock the gyro can add over a held button */
 function refreshSteer(){
-  Input.steer=(keys.ArrowLeft?-1:0)+(keys.ArrowRight?1:0);
-  if(touch.left)Input.steer=-1;
-  if(touch.right)Input.steer=1;
-  if(Input.steer===0&&Tilt.active&&Tilt.enabled)Input.steer=Tilt.steer;
+  let s=(keys.ArrowLeft?-1:0)+(keys.ArrowRight?1:0);
+  if(touch.left)s=-1;
+  if(touch.right)s=1;
+  Input.throttle=0;
+  if(Tilt.active&&Tilt.enabled){
+    /* tilt sums directly with the buttons: it reinforces a held button and
+       steers on its own when no button is pressed */
+    s=clamp(s+Tilt.steer,-1-TILT_STEER_ADD,1+TILT_STEER_ADD);
+    Input.throttle=Tilt.pedal;
+  }
+  Input.steer=s;
   Input.brake=!!(keys.ArrowDown||keys.KeyS||touch.brake);
   Input.drift=!!(keys.Space||keys.ShiftLeft||keys.ShiftRight||touch.drift);
 }
@@ -1588,9 +1628,11 @@ document.addEventListener('dragstart',e=>{e.preventDefault();});
    against a baseline captured at race start, so it is pose- and
    landscape-side-independent: the steering signal is the twist about the
    screen normal, which forward/back lean never pollutes. */
-const Tilt={supported:false,enabled:true,active:false,base:null,steer:0};
+const Tilt={supported:false,enabled:true,active:false,base:null,steer:0,pedal:0};
 const TILT_MAX_DEG=24;          /* twist for full lock */
 const TILT_DEAD=0.06;           /* deadzone in twist units (~3.5deg) */
+const TILT_PEDAL_MAX_DEG=20;    /* forward/back lean for full throttle/brake */
+const TILT_PEDAL_DEAD=0.05;     /* lean deadzone (~3deg) */
 function tiltMat(a,b,g){
   const D=Math.PI/180,ca=Math.cos(a*D),sa=Math.sin(a*D),cb=Math.cos(b*D),sb=Math.sin(b*D),cg=Math.cos(g*D),sg=Math.sin(g*D);
   return [
@@ -1599,19 +1641,48 @@ function tiltMat(a,b,g){
     [-cb*sg,sb,cb*cg]
   ];
 }
-function tiltTwist(base,now){
-  if(!base||!now)return 0;
+function tiltAxes(base,now){
+  /* relative rotation base->now as sin-components about the base device
+     axes: [0] about device-x, [1] about device-y, [2] about screen normal */
+  if(!base||!now)return [0,0,0];
   const A=tiltMat(base.alpha,base.beta,base.gamma),B=tiltMat(now.alpha,now.beta,now.gamma);
-  let r10=0,r01=0;
-  for(let k=0;k<3;k++){r10+=A[k][1]*B[k][0];r01+=A[k][0]*B[k][1];}
-  return (r10-r01)/2; /* = sin(twist about screen normal) */
+  let r10=0,r01=0,r21=0,r12=0,r02=0,r20=0;
+  for(let k=0;k<3;k++){
+    r10+=A[k][1]*B[k][0];r01+=A[k][0]*B[k][1];
+    r21+=A[k][2]*B[k][1];r12+=A[k][1]*B[k][2];
+    r02+=A[k][0]*B[k][2];r20+=A[k][2]*B[k][0];
+  }
+  return [(r21-r12)/2,(r02-r20)/2,(r10-r01)/2];
 }
+function tiltTwist(base,now){ return tiltAxes(base,now)[2]; }
 function tiltSteerFromTwist(w){
   if(Math.abs(w)<TILT_DEAD)return 0;
   const max=Math.sin(TILT_MAX_DEG*Math.PI/180);
   return -clamp(Math.sign(w)*(Math.abs(w)-TILT_DEAD)/(max-TILT_DEAD),-1,1);
 }
-function tiltRecalibrate(){Tilt.base=null;Tilt.steer=0;}
+function screenAngleDeg(){
+  let a=0;
+  try{
+    if(window.screen&&screen.orientation&&typeof screen.orientation.angle==='number')a=screen.orientation.angle;
+    else if(typeof window.orientation==='number')a=window.orientation;
+  }catch(e){}
+  return ((a%360)+360)%360;
+}
+function tiltLeanFromAxes(w,angDeg){
+  /* forward/back lean of the screen's top edge, landscape-side independent:
+     +1 = top edge comes toward the player (brake), -1 = away (accelerate) */
+  const a=(angDeg===undefined?screenAngleDeg():angDeg);
+  if(a===90)return -w[1];
+  if(a===270)return w[1];
+  return w[0];
+}
+function tiltPedalFromLean(l){
+  /* +1 full accelerate (top edge away), -1 full brake (toward the player) */
+  if(Math.abs(l)<TILT_PEDAL_DEAD)return 0;
+  const max=Math.sin(TILT_PEDAL_MAX_DEG*Math.PI/180);
+  return -clamp(Math.sign(l)*(Math.abs(l)-TILT_PEDAL_DEAD)/(max-TILT_PEDAL_DEAD),-1,1);
+}
+function tiltRecalibrate(){Tilt.base=null;Tilt.steer=0;Tilt.pedal=0;}
 function tiltRequestPermission(){
   try{
     if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
@@ -1622,10 +1693,14 @@ function tiltRequestPermission(){
 window.addEventListener('deviceorientation',e=>{
   if(e.alpha===null||e.alpha===undefined||e.beta===null||e.gamma===null)return;
   Tilt.supported=true;
-  if(!Tilt.enabled){Tilt.active=false;Tilt.steer=0;return;}
+  if(!Tilt.enabled){Tilt.active=false;Tilt.steer=0;Tilt.pedal=0;return;}
   const now={alpha:e.alpha,beta:e.beta,gamma:e.gamma};
-  if(!Tilt.base){Tilt.base=now;Tilt.steer=0;}
-  else Tilt.steer=tiltSteerFromTwist(tiltTwist(Tilt.base,now));
+  if(!Tilt.base){Tilt.base=now;Tilt.steer=0;Tilt.pedal=0;}
+  else{
+    const ax=tiltAxes(Tilt.base,now);
+    Tilt.steer=tiltSteerFromTwist(ax[2]);
+    Tilt.pedal=tiltPedalFromLean(tiltLeanFromAxes(ax));
+  }
   Tilt.active=true;
   updateTiltBtn();
 });
@@ -1644,7 +1719,7 @@ function setupTouch(){
     e.preventDefault();Audio8.resume();
     Tilt.enabled=!Tilt.enabled;
     if(Tilt.enabled)tiltRecalibrate();
-    if(!Tilt.enabled){Tilt.active=false;Tilt.steer=0;}
+    if(!Tilt.enabled){Tilt.active=false;Tilt.steer=0;Tilt.pedal=0;}
     updateTiltBtn();
   });
   document.addEventListener('pointerdown',tiltRequestPermission,{once:true});
@@ -1728,8 +1803,8 @@ function boot(){
 boot();
 
 /* ----------------------------- test hooks ----------------------------- */
-window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,
-  tiltMat,tiltTwist,tiltSteerFromTwist,tiltRecalibrate,
+window.__MK={Game,Game2:Game,DRIVERS,TRACKS,ITEMS,SONGS,Audio8,Input,Tilt,touch,refreshSteer,
+  tiltMat,tiltAxes,tiltTwist,tiltSteerFromTwist,tiltLeanFromAxes,tiltPedalFromLean,tiltRecalibrate,segDist,
   buildTrack,builtTrack,makeRace,stepRace,stepKart,aiInput,kartContacts,
   circleHitsWall,pushOutOfWalls,WALL_R,
   stepWorldItems,useItem,hitKart,rollItem,maxSpeed,tileAt,project,fmtTime,
