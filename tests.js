@@ -485,6 +485,66 @@ T('viewport: UI layers and corner buttons track the visible rect',()=>{
     M.fitCanvas();
   }
 });
+/* ---- orientation hold: no full-screen flip mid-race ---- */
+T('orientation: portrait mid-race rotates the frame instead of blocking',()=>{
+  const realVV=window.visualViewport;
+  const fake={width:390,height:700,offsetLeft:0,offsetTop:0,addEventListener(){}};
+  const st=M.Game.state, tm=M.Game.touchMode;
+  try{
+    M.Game.touchMode=true; M.Game.state='race';
+    Object.defineProperty(window,'visualViewport',{value:fake,configurable:true});
+    M.fitCanvas();
+    ok(M.Orient.rotated===true,'rotated flag off');
+    const cv=document.getElementById('game');
+    const w=parseFloat(cv.style.width),h=parseFloat(cv.style.height);
+    ok(h<=390+1&&w<=700+1,'canvas overflows rotated area '+w+'x'+h);
+    ok(Math.abs(w/h-16/9)<0.02,'ratio '+(w/h));
+    M.updateRotateHint();
+    ok(document.getElementById('rotateHint').classList.contains('hidden'),'rotate hint covers the rotated game');
+  }finally{
+    M.Game.state=st; M.Game.touchMode=tm;
+    Object.defineProperty(window,'visualViewport',{value:realVV,configurable:true});
+    M.fitCanvas();
+  }
+});
+T('orientation: no rotation in landscape or when the OS lock holds',()=>{
+  const realVV=window.visualViewport;
+  const st=M.Game.state, tm=M.Game.touchMode;
+  try{
+    M.Game.touchMode=true; M.Game.state='race';
+    const land={width:700,height:390,offsetLeft:0,offsetTop:0,addEventListener(){}};
+    Object.defineProperty(window,'visualViewport',{value:land,configurable:true});
+    M.fitCanvas();
+    ok(M.Orient.rotated===false,'landscape must not rotate');
+    const port={width:390,height:700,offsetLeft:0,offsetTop:0,addEventListener(){}};
+    Object.defineProperty(window,'visualViewport',{value:port,configurable:true});
+    M.Orient.locked=true; M.fitCanvas();
+    ok(M.Orient.rotated===false,'locked phone never needs the CSS fallback');
+  }finally{
+    M.Game.state=st; M.Game.touchMode=tm; M.Orient.locked=false;
+    Object.defineProperty(window,'visualViewport',{value:realVV,configurable:true});
+    M.fitCanvas();
+  }
+});
+T('orientation: tilt pedal reads the content orientation when rotated',()=>{
+  const base=M.screenAngleDeg(), r0=M.Orient.rotated;
+  try{
+    M.Orient.rotated=false;
+    ok(M.tiltEffectiveAngle()===base,'unrotated='+M.tiltEffectiveAngle()+' base='+base);
+    M.Orient.rotated=true;
+    ok(M.tiltEffectiveAngle()===(base+90)%360,'rotated adds 90: '+M.tiltEffectiveAngle());
+    /* rotated fallback = landscape-90 mapping: gamma+ keeps accelerating */
+    const flat={alpha:0,beta:0,gamma:0};
+    const ax=M.tiltAxes(flat,{alpha:0,beta:0,gamma:20});
+    ok(M.tiltPedalFromLean(M.tiltLeanFromAxes(ax,M.tiltEffectiveAngle()))>0.8,
+      'rotated: gamma+ should still accelerate');
+  }finally{ M.Orient.rotated=r0; }
+});
+T('orientation: lock request and release never throw without support',()=>{
+  M.orientRequestLock();
+  M.orientRelease();
+  ok(true,'no exception');
+});
 document.getElementById('out').textContent=
   'RESULT '+pass+'/'+(pass+fail)+'\n'+out.join('\n');
 document.title=fail===0?'DONE-OK':'DONE-FAIL';
