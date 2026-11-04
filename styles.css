@@ -29,7 +29,8 @@ html,body{height:100%;background:#000;overflow:hidden;font-family:"Space Grotesk
 /* touch */
 #touchUI{position:fixed;inset:0;z-index:40;pointer-events:none}
 #steerZone{position:absolute;left:0;bottom:0;height:46%;width:52%;display:flex;align-items:flex-end;gap:10px;padding:0 0 14px 12px}
-#actionZone{position:absolute;right:0;bottom:0;height:52%;width:40%;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:10px;padding:0 12px 14px 0}
+#actionZone{position:absolute;right:0;bottom:0;height:52%;width:40%;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:10px;padding:0 calc(clamp(66px,17vw,100px) + 24px) 14px 0}
+#btnGas{position:absolute;right:12px;bottom:14px;background:rgba(60,34,8,.7);font-size:clamp(11px,2.8vw,15px);font-weight:bold}
 .tbtn{pointer-events:auto;border:2px solid rgba(255,176,0,.55);background:rgba(31,21,10,.55);color:var(--amber);
   border-radius:14px;font-weight:700;letter-spacing:.5px;backdrop-filter:blur(2px);touch-action:none}
 .tbtn.steer{width:clamp(64px,18vw,110px);height:clamp(64px,18vw,110px);font-size:clamp(26px,7vw,42px)}
