@@ -43,6 +43,11 @@ Obre l'enllaç amb Chrome (escriptori o Android). En mòbil, juga en panoràmic.
 
 **Teclat:** ← → girar · ↓/S frenar · Espai/Maj derrapar · X/Intro objecte · Esc/P pausa
 
+**Orientació:** el joc aguanta la pantalla en panoràmic durant la cursa, encara que
+el mòbil interpreti la inclinació del gir com un canvi de posició: a Chrome/Android
+bloqueja l'orientació de debò (pantalla completa), i on el navegador no ho permet
+(p. ex. iPhone) el joc rota internament i la cursa no s'interromp.
+
 ## Objectes
 
 Pinzellada (pintura lliscant) · Llança de Sant Jordi (perseguidora) ·
@@ -54,4 +59,4 @@ Les monedes romàniques (màx. 10) pugen la velocitat punta. Les fletxes ambre s
 
 `index.html` + `styles.css` + `game.js` (sense dependències ni build).
 Render Mode 7 per línies d'escaneig sobre `<canvas>`, so WebAudio generatiu.
-`tests.html` executa la bateria automàtica de mecàniques (46 proves).
+`tests.html` executa la bateria automàtica de mecàniques (50 proves).
